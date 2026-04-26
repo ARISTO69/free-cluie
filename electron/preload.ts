@@ -26,6 +26,8 @@ interface ElectronAPI {
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: () => Promise<void>
+  takeAreaScreenshot: () => Promise<{ path: string; preview: string }>
+  toggleWindow: () => Promise<void>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
   moveWindowUp: () => Promise<void>
@@ -40,18 +42,29 @@ interface ElectronAPI {
   getSavedLlmSettings: () => Promise<{
     provider: "ollama" | "gemini" | "openrouter" | "mistral"
     geminiApiKey?: string
+    geminiModel?: string
     openRouterApiKey?: string
     openRouterModel?: string
     mistralApiKey?: string
     mistralModel?: string
     ollamaUrl?: string
     ollamaModel?: string
+    systemPrompt?: string
+    deepgramApiKey?: string
   } | null>
   getAvailableOllamaModels: () => Promise<string[]>
+  getAvailableProviderModels: (
+    provider: "ollama" | "gemini" | "openrouter" | "mistral",
+    options?: { apiKey?: string; ollamaUrl?: string }
+  ) => Promise<Array<{ id: string; name?: string }>>
   switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
-  switchToGemini: (apiKey?: string) => Promise<{ success: boolean; error?: string }>
+  switchToGemini: (apiKey?: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+  saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
+  getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
+  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>
   testLlmConnection: () => Promise<{ success: boolean; error?: string }>
   
   invoke: (channel: string, ...args: any[]) => Promise<any>
@@ -79,6 +92,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateContentDimensions: (dimensions: { width: number; height: number }) =>
     ipcRenderer.invoke("update-content-dimensions", dimensions),
   takeScreenshot: () => ipcRenderer.invoke("take-screenshot"),
+  takeAreaScreenshot: () => ipcRenderer.invoke("take-area-screenshot"),
+  toggleWindow: () => ipcRenderer.invoke("toggle-window"),
   getScreenshots: () => ipcRenderer.invoke("get-screenshots"),
   deleteScreenshot: (path: string) =>
     ipcRenderer.invoke("delete-screenshot", path),
@@ -196,10 +211,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCurrentLlmConfig: () => ipcRenderer.invoke("get-current-llm-config"),
   getSavedLlmSettings: () => ipcRenderer.invoke("get-saved-llm-settings"),
   getAvailableOllamaModels: () => ipcRenderer.invoke("get-available-ollama-models"),
+  getAvailableProviderModels: (provider: "ollama" | "gemini" | "openrouter" | "mistral", options?: { apiKey?: string; ollamaUrl?: string }) =>
+    ipcRenderer.invoke("get-available-provider-models", provider, options),
   switchToOllama: (model?: string, url?: string) => ipcRenderer.invoke("switch-to-ollama", model, url),
-  switchToGemini: (apiKey?: string) => ipcRenderer.invoke("switch-to-gemini", apiKey),
+  switchToGemini: (apiKey?: string, model?: string) => ipcRenderer.invoke("switch-to-gemini", apiKey, model),
   switchToOpenRouter: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-openrouter", apiKey, model),
   switchToMistral: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-mistral", apiKey, model),
+  saveSystemPrompt: (systemPrompt: string) => ipcRenderer.invoke("save-system-prompt", systemPrompt),
+  saveDeepgramApiKey: (apiKey: string) => ipcRenderer.invoke("save-deepgram-api-key", apiKey),
+  getWindowSettings: () => ipcRenderer.invoke("get-window-settings"),
+  setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.invoke("set-always-on-top", alwaysOnTop),
   testLlmConnection: () => ipcRenderer.invoke("test-llm-connection"),
   
   invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args)

@@ -367,7 +367,6 @@ const Debug: React.FC<DebugProps> = ({ isProcessing, setIsProcessing }) => {
 
       {/* Navbar of commands with the tooltip */}
       <ExtraScreenshotsQueueHelper
-        extraScreenshots={extraScreenshots}
         onTooltipVisibilityChange={handleTooltipVisibilityChange}
       />
 

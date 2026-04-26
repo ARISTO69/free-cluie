@@ -4,6 +4,7 @@ import { ToastViewport } from "@radix-ui/react-toast"
 import { useEffect, useRef, useState } from "react"
 import Solutions from "./_pages/Solutions"
 import { QueryClient, QueryClientProvider } from "react-query"
+import { UITheme } from "./types/theme"
 
 declare global {
   interface Window {
@@ -24,6 +25,8 @@ declare global {
       onProcessingNoScreenshots: (callback: () => void) => () => void
       onResetView: (callback: () => void) => () => void
       takeScreenshot: () => Promise<void>
+      takeAreaScreenshot: () => Promise<{ path: string; preview: string }>
+      toggleWindow: () => Promise<void>
 
       //INITIAL SOLUTION EVENTS
       deleteScreenshot: (
@@ -54,18 +57,29 @@ declare global {
       getSavedLlmSettings: () => Promise<{
         provider: "ollama" | "gemini" | "openrouter" | "mistral"
         geminiApiKey?: string
+        geminiModel?: string
         openRouterApiKey?: string
         openRouterModel?: string
         mistralApiKey?: string
         mistralModel?: string
         ollamaUrl?: string
         ollamaModel?: string
+        systemPrompt?: string
+        deepgramApiKey?: string
       } | null>
       getAvailableOllamaModels: () => Promise<string[]>
+      getAvailableProviderModels: (
+        provider: "ollama" | "gemini" | "openrouter" | "mistral",
+        options?: { apiKey?: string; ollamaUrl?: string }
+      ) => Promise<Array<{ id: string; name?: string }>>
       switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
-      switchToGemini: (apiKey?: string) => Promise<{ success: boolean; error?: string }>
+      switchToGemini: (apiKey?: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
+      saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+      saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
+      getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
+      setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>
       testLlmConnection: () => Promise<{ success: boolean; error?: string }>
       
       invoke: (channel: string, ...args: any[]) => Promise<any>
@@ -84,6 +98,7 @@ const queryClient = new QueryClient({
 
 const App: React.FC = () => {
   const [view, setView] = useState<"queue" | "solutions" | "debug">("queue")
+  const [uiTheme, setUiTheme] = useState<UITheme>("translucent")
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Effect for height monitoring
@@ -176,13 +191,13 @@ const App: React.FC = () => {
   }, [])
 
   return (
-    <div ref={containerRef} className="min-h-0">
+    <div ref={containerRef} className="min-h-0" data-ui-theme={uiTheme}>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
           {view === "queue" ? (
-            <Queue setView={setView} />
+            <Queue setView={setView} uiTheme={uiTheme} onThemeChange={setUiTheme} />
           ) : view === "solutions" ? (
-            <Solutions setView={setView} />
+            <Solutions setView={setView} uiTheme={uiTheme} />
           ) : (
             <></>
           )}

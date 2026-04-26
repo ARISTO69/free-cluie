@@ -3,6 +3,38 @@ import fs from "fs"
 // ─── Provider types ───────────────────────────────────────────────────────────
 type Provider = "gemini" | "ollama" | "openrouter" | "mistral"
 
+export interface ProviderModel {
+  id: string
+  name?: string
+}
+
+const DEFAULT_GEMINI_MODELS: ProviderModel[] = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+  { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite" },
+  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
+  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" }
+]
+
+const DEFAULT_OPENROUTER_MODELS: ProviderModel[] = [
+  { id: "openai/gpt-4.1", name: "OpenAI GPT-4.1" },
+  { id: "openai/gpt-4.1-mini", name: "OpenAI GPT-4.1 Mini" },
+  { id: "anthropic/claude-sonnet-4", name: "Anthropic Claude Sonnet 4" },
+  { id: "google/gemini-2.5-pro", name: "Google Gemini 2.5 Pro" },
+  { id: "google/gemini-2.5-flash", name: "Google Gemini 2.5 Flash" },
+  { id: "mistralai/mistral-large", name: "Mistral Large" },
+  { id: "meta-llama/llama-3.3-70b-instruct", name: "Meta Llama 3.3 70B Instruct" }
+]
+
+const DEFAULT_MISTRAL_MODELS: ProviderModel[] = [
+  { id: "mistral-large-latest", name: "Mistral Large" },
+  { id: "mistral-small-latest", name: "Mistral Small" },
+  { id: "codestral-latest", name: "Codestral" },
+  { id: "pixtral-large-latest", name: "Pixtral Large" },
+  { id: "open-mistral-nemo", name: "Open Mistral Nemo" }
+]
+
 interface OllamaResponse {
   response: string
   done: boolean
@@ -22,10 +54,12 @@ interface OpenAIContentPart {
 // ─── LLMHelper ────────────────────────────────────────────────────────────────
 export class LLMHelper {
   private provider: Provider = "gemini"
-  private readonly systemPrompt = `You are Wingman AI, a helpful, proactive assistant for any kind of problem or situation (not just coding). For any user input, analyze the situation, provide a clear problem statement, relevant context, and suggest several possible responses or actions the user could take next. Always explain your reasoning. Present your suggestions as a list of options or next steps.`
+  private readonly defaultSystemPrompt = `You are Wingman AI, a helpful, proactive assistant for any kind of problem or situation (not just coding). For any user input, analyze the situation, provide a clear problem statement, relevant context, and suggest several possible responses or actions the user could take next. Always explain your reasoning. Present your suggestions as a list of options or next steps.`
+  private customSystemPrompt: string = ""
 
   // Gemini
   private geminiModel: any = null
+  private geminiModelName: string = "gemini-2.0-flash"
 
   // Ollama
   private ollamaModel: string = "llama3.2"
@@ -35,6 +69,7 @@ export class LLMHelper {
   private openaiApiKey: string = ""
   private openaiModel: string = ""
   private openaiBaseUrl: string = ""
+  private deepgramApiKey: string = ""
 
   constructor(
     apiKey?: string,
@@ -44,8 +79,15 @@ export class LLMHelper {
     useOpenRouter: boolean = false,
     openRouterModel?: string,
     useMistral: boolean = false,
-    mistralModel?: string
+    mistralModel?: string,
+    systemPrompt?: string,
+    geminiModel?: string,
+    deepgramApiKey?: string
   ) {
+    this.setSystemPrompt(systemPrompt || "")
+    this.geminiModelName = geminiModel || this.geminiModelName
+    this.deepgramApiKey = deepgramApiKey || ""
+
     if (useOllama) {
       this.provider = "ollama"
       this.ollamaUrl = ollamaUrl || "http://localhost:11434"
@@ -71,8 +113,8 @@ export class LLMHelper {
       this.provider = "gemini"
       const { GoogleGenerativeAI } = require("@google/generative-ai")
       const genAI = new GoogleGenerativeAI(apiKey)
-      this.geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
-      console.log("[LLMHelper] Using Google Gemini")
+      this.geminiModel = genAI.getGenerativeModel({ model: this.geminiModelName })
+      console.log(`[LLMHelper] Using Google Gemini with model: ${this.geminiModelName}`)
 
     } else {
       throw new Error("No valid provider configured. Set OPENROUTER_API_KEY, MISTRAL_API_KEY, GEMINI_API_KEY, or USE_OLLAMA=true")
@@ -84,6 +126,24 @@ export class LLMHelper {
   private cleanJsonResponse(text: string): string {
     text = text.replace(/^```(?:json)?\n/, "").replace(/\n```$/, "")
     return text.trim()
+  }
+
+  private getSystemPrompt(): string {
+    const custom = this.customSystemPrompt.trim()
+    if (!custom) return this.defaultSystemPrompt
+    return `${this.defaultSystemPrompt}\n\nAdditional user instructions:\n${custom}`
+  }
+
+  public setSystemPrompt(prompt: string): void {
+    this.customSystemPrompt = prompt.trim()
+  }
+
+  public getCustomSystemPrompt(): string {
+    return this.customSystemPrompt
+  }
+
+  public setDeepgramApiKey(apiKey: string): void {
+    this.deepgramApiKey = apiKey.trim()
   }
 
   private async imagePathToBase64DataUrl(imagePath: string): Promise<string> {
@@ -168,6 +228,93 @@ export class LLMHelper {
     }
   }
 
+  public async getAvailableModels(
+    provider: Provider,
+    options: { apiKey?: string; ollamaUrl?: string } = {}
+  ): Promise<ProviderModel[]> {
+    if (provider === "ollama") {
+      const previousUrl = this.ollamaUrl
+      if (options.ollamaUrl) this.ollamaUrl = options.ollamaUrl
+      const models = await this.getOllamaModels()
+      this.ollamaUrl = previousUrl
+      return models.map((id) => ({ id }))
+    }
+
+    if (provider === "gemini") {
+      return this.getGeminiModels(options.apiKey)
+    }
+
+    if (provider === "mistral") {
+      return this.getMistralModels(options.apiKey)
+    }
+
+    return this.getOpenRouterModels()
+  }
+
+  private async getGeminiModels(apiKey?: string): Promise<ProviderModel[]> {
+    if (!apiKey) return DEFAULT_GEMINI_MODELS
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(apiKey)}`
+      )
+      if (!response.ok) throw new Error(`Gemini models API error ${response.status}`)
+      const data = await response.json()
+      const models = (data.models || [])
+        .filter((model: any) => model.supportedGenerationMethods?.includes("generateContent"))
+        .map((model: any) => ({
+          id: String(model.name || "").replace(/^models\//, ""),
+          name: model.displayName
+        }))
+        .filter((model: ProviderModel) => model.id)
+      return models.length > 0 ? models : DEFAULT_GEMINI_MODELS
+    } catch (error) {
+      console.error("[LLMHelper] Error fetching Gemini models:", error)
+      return DEFAULT_GEMINI_MODELS
+    }
+  }
+
+  private async getOpenRouterModels(): Promise<ProviderModel[]> {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models")
+      if (!response.ok) throw new Error(`OpenRouter models API error ${response.status}`)
+      const data = await response.json()
+      const models = (data.data || [])
+        .map((model: any) => ({
+          id: String(model.id || ""),
+          name: model.name
+        }))
+        .filter((model: ProviderModel) => model.id)
+      return models.length > 0 ? models : DEFAULT_OPENROUTER_MODELS
+    } catch (error) {
+      console.error("[LLMHelper] Error fetching OpenRouter models:", error)
+      return DEFAULT_OPENROUTER_MODELS
+    }
+  }
+
+  private async getMistralModels(apiKey?: string): Promise<ProviderModel[]> {
+    if (!apiKey) return DEFAULT_MISTRAL_MODELS
+
+    try {
+      const response = await fetch("https://api.mistral.ai/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      })
+      if (!response.ok) throw new Error(`Mistral models API error ${response.status}`)
+      const data = await response.json()
+      const models = (data.data || [])
+        .filter((model: any) => model.capabilities?.completion_chat !== false && !model.archived)
+        .map((model: any) => ({
+          id: String(model.id || ""),
+          name: model.name || model.root
+        }))
+        .filter((model: ProviderModel) => model.id)
+      return models.length > 0 ? models : DEFAULT_MISTRAL_MODELS
+    } catch (error) {
+      console.error("[LLMHelper] Error fetching Mistral models:", error)
+      return DEFAULT_MISTRAL_MODELS
+    }
+  }
+
   private async initializeOllamaModel(): Promise<void> {
     try {
       const models = await this.getOllamaModels()
@@ -202,14 +349,14 @@ export class LLMHelper {
   public async chatWithGemini(message: string): Promise<string> {
     try {
       if (this.provider === "ollama") {
-        return await this.callOllama(message)
+        return await this.callOllama(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
       } else if (this.provider === "openrouter" || this.provider === "mistral") {
         return await this.callOpenAICompatible([
-          { role: "system", content: this.systemPrompt },
+          { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: message },
         ])
       } else {
-        const result = await this.geminiModel.generateContent(message)
+        const result = await this.geminiModel.generateContent(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
         return result.response.text()
       }
     } catch (error: any) {
@@ -221,7 +368,7 @@ export class LLMHelper {
   // ─── Image extraction ────────────────────────────────────────────────────────
 
   public async extractProblemFromImages(imagePaths: string[]) {
-    const jsonPrompt = `${this.systemPrompt}\n\nAnalyze these images and extract the following information in JSON format:\n{\n  "problem_statement": "A clear statement of the problem or situation.",\n  "context": "Relevant background or context from the images.",\n  "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n  "reasoning": "Explanation of why these suggestions are appropriate."\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
+    const jsonPrompt = `${this.getSystemPrompt()}\n\nAnalyze these images and extract the following information in JSON format:\n{\n  "problem_statement": "A clear statement of the problem or situation.",\n  "context": "Relevant background or context from the images.",\n  "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n  "reasoning": "Explanation of why these suggestions are appropriate."\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
 
     try {
       if (this.provider === "openrouter" || this.provider === "mistral") {
@@ -254,14 +401,14 @@ export class LLMHelper {
   // ─── Generate solution ───────────────────────────────────────────────────────
 
   public async generateSolution(problemInfo: any) {
-    const prompt = `${this.systemPrompt}\n\nGiven this problem or situation:\n${JSON.stringify(problemInfo, null, 2)}\n\nProvide your response in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem or situation.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n    "reasoning": "Explanation of why these suggestions are appropriate."\n  }\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
+    const prompt = `${this.getSystemPrompt()}\n\nGiven this problem or situation:\n${JSON.stringify(problemInfo, null, 2)}\n\nProvide your response in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem or situation.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n    "reasoning": "Explanation of why these suggestions are appropriate."\n  }\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
 
     console.log(`[LLMHelper] Calling ${this.provider} for solution...`)
     try {
       let text: string
       if (this.provider === "openrouter" || this.provider === "mistral") {
         text = await this.callOpenAICompatible([
-          { role: "system", content: this.systemPrompt },
+          { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: prompt },
         ])
       } else if (this.provider === "ollama") {
@@ -282,7 +429,7 @@ export class LLMHelper {
   // ─── Debug solution with images ──────────────────────────────────────────────
 
   public async debugSolutionWithImages(problemInfo: any, currentCode: string, debugImagePaths: string[]) {
-    const prompt = `${this.systemPrompt}\n\nGiven:\n1. Original problem: ${JSON.stringify(problemInfo, null, 2)}\n2. Current response: ${currentCode}\n3. Debug images provided\n\nAnalyze and provide feedback in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer", "Second possible answer", "..."],\n    "reasoning": "Explanation of suggestions."\n  }\n}\nReturn ONLY the JSON object.`
+    const prompt = `${this.getSystemPrompt()}\n\nGiven:\n1. Original problem: ${JSON.stringify(problemInfo, null, 2)}\n2. Current response: ${currentCode}\n3. Debug images provided\n\nAnalyze and provide feedback in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer", "Second possible answer", "..."],\n    "reasoning": "Explanation of suggestions."\n  }\n}\nReturn ONLY the JSON object.`
 
     try {
       if (this.provider === "openrouter" || this.provider === "mistral") {
@@ -314,7 +461,7 @@ export class LLMHelper {
   // ─── Analyze image file ──────────────────────────────────────────────────────
 
   public async analyzeImageFile(imagePath: string) {
-    const prompt = `${this.systemPrompt}\n\nDescribe the content of this image concisely. Suggest several possible actions or responses the user could take. Answer naturally and briefly.`
+    const prompt = `${this.getSystemPrompt()}\n\nDescribe the content of this image concisely. Suggest several possible actions or responses the user could take. Answer naturally and briefly.`
 
     try {
       let text: string
@@ -363,7 +510,7 @@ export class LLMHelper {
     try {
       const audioData = await fs.promises.readFile(audioPath)
       const audioPart = { inlineData: { data: audioData.toString("base64"), mimeType: "audio/mp3" } }
-      const prompt = `${this.systemPrompt}\n\nDescribe this audio clip concisely. Suggest possible actions or responses. Answer naturally.`
+      const prompt = `${this.getSystemPrompt()}\n\nDescribe this audio clip concisely. Suggest possible actions or responses. Answer naturally.`
       const result = await this.geminiModel.generateContent([prompt, audioPart])
       return { text: result.response.text(), timestamp: Date.now() }
     } catch (error) {
@@ -374,21 +521,54 @@ export class LLMHelper {
 
   public async analyzeAudioFromBase64(data: string, mimeType: string) {
     if (this.provider !== "gemini") {
-      return {
-        text: "Audio analysis requires Gemini. Currently using " + this.provider + ". Please take a screenshot instead.",
-        timestamp: Date.now(),
+      if (!this.deepgramApiKey) {
+        return {
+          text: "Audio input with " + this.provider + " requires a Deepgram API key. Add it in Settings, then try the microphone again.",
+          timestamp: Date.now(),
+        }
       }
+
+      const transcript = await this.transcribeWithDeepgram(data, mimeType)
+      if (!transcript.trim()) {
+        return {
+          text: "Deepgram did not return any speech transcript.",
+          timestamp: Date.now(),
+        }
+      }
+
+      const text = await this.chatWithGemini(transcript)
+      return { text, timestamp: Date.now() }
     }
 
     try {
       const audioPart = { inlineData: { data, mimeType } }
-      const prompt = `${this.systemPrompt}\n\nDescribe this audio clip concisely. Suggest possible next actions. Be brief.`
+      const prompt = `${this.getSystemPrompt()}\n\nDescribe this audio clip concisely. Suggest possible next actions. Be brief.`
       const result = await this.geminiModel.generateContent([prompt, audioPart])
       return { text: result.response.text(), timestamp: Date.now() }
     } catch (error) {
       console.error("Error analyzing audio from base64:", error)
       throw error
     }
+  }
+
+  private async transcribeWithDeepgram(data: string, mimeType: string): Promise<string> {
+    const audio = Buffer.from(data, "base64")
+    const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true", {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${this.deepgramApiKey}`,
+        "Content-Type": mimeType || "audio/webm"
+      },
+      body: audio
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Deepgram API error ${response.status}: ${errorText}`)
+    }
+
+    const result = await response.json()
+    return result.results?.channels?.[0]?.alternatives?.[0]?.transcript || ""
   }
 
   // ─── Provider info & switching ───────────────────────────────────────────────
@@ -400,7 +580,7 @@ export class LLMHelper {
   public getCurrentModel(): string {
     if (this.provider === "ollama") return this.ollamaModel
     if (this.provider === "openrouter" || this.provider === "mistral") return this.openaiModel
-    return "gemini-2.0-flash"
+    return this.geminiModelName
   }
 
   public isUsingOllama(): boolean {
@@ -415,15 +595,16 @@ export class LLMHelper {
     console.log(`[LLMHelper] Switched to Ollama: ${this.ollamaModel}`)
   }
 
-  public async switchToGemini(apiKey?: string): Promise<void> {
+  public async switchToGemini(apiKey?: string, model?: string): Promise<void> {
+    if (model) this.geminiModelName = model
     if (apiKey) {
       const { GoogleGenerativeAI } = require("@google/generative-ai")
       const genAI = new GoogleGenerativeAI(apiKey)
-      this.geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+      this.geminiModel = genAI.getGenerativeModel({ model: this.geminiModelName })
     }
     if (!this.geminiModel) throw new Error("No Gemini API key provided")
     this.provider = "gemini"
-    console.log("[LLMHelper] Switched to Gemini")
+    console.log(`[LLMHelper] Switched to Gemini: ${this.geminiModelName}`)
   }
 
   public async switchToOpenRouter(apiKey: string, model?: string): Promise<void> {

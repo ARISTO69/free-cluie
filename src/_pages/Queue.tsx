@@ -10,14 +10,18 @@ import {
 } from "../components/ui/toast"
 import QueueCommands from "../components/Queue/QueueCommands"
 import ModelSelector from "../components/ui/ModelSelector"
+import { UITheme } from "../types/theme"
+import { Mic } from "lucide-react"
 
 type Provider = "ollama" | "gemini" | "openrouter" | "mistral"
 
 interface QueueProps {
   setView: React.Dispatch<React.SetStateAction<"queue" | "solutions" | "debug">>
+  uiTheme: UITheme
+  onThemeChange: (theme: UITheme) => void
 }
 
-const Queue: React.FC<QueueProps> = ({ setView }) => {
+const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
   const [toastOpen, setToastOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<ToastMessage>({
     title: "",
@@ -34,6 +38,9 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
   const [chatLoading, setChatLoading] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const chatInputRef = useRef<HTMLInputElement>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const audioChunks = useRef<Blob[]>([])
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [currentModel, setCurrentModel] = useState<{ provider: string; model: string }>({
@@ -117,6 +124,52 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
     } finally {
       setChatLoading(false)
       chatInputRef.current?.focus()
+    }
+  }
+
+  const handleRecordClick = async () => {
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const recorder = new MediaRecorder(stream)
+        audioChunks.current = []
+        recorder.ondataavailable = (event) => audioChunks.current.push(event.data)
+        recorder.onstop = async () => {
+          const blob = new Blob(audioChunks.current, {
+            type: audioChunks.current[0]?.type || "audio/webm"
+          })
+          audioChunks.current = []
+          stream.getTracks().forEach((track) => track.stop())
+          setChatLoading(true)
+          try {
+            const reader = new FileReader()
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              reader.onerror = () => reject(reader.error)
+              reader.onloadend = () => resolve((reader.result as string).split(",")[1])
+              reader.readAsDataURL(blob)
+            })
+            const result = await window.electronAPI.analyzeAudioFromBase64(
+              base64Data,
+              blob.type
+            )
+            setChatMessages((msgs) => [...msgs, { role: "gemini", text: result.text }])
+          } catch (error) {
+            setChatMessages((msgs) => [...msgs, { role: "gemini", text: "Audio analysis failed: " + String(error) }])
+          } finally {
+            setChatLoading(false)
+            chatInputRef.current?.focus()
+          }
+        }
+        setMediaRecorder(recorder)
+        recorder.start()
+        setIsRecording(true)
+      } catch (error) {
+        setChatMessages((msgs) => [...msgs, { role: "gemini", text: "Could not start microphone recording: " + String(error) }])
+      }
+    } else {
+      mediaRecorder?.stop()
+      setIsRecording(false)
+      setMediaRecorder(null)
     }
   }
 
@@ -245,7 +298,6 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
           </Toast>
           <div className="w-fit">
             <QueueCommands
-              screenshots={screenshots}
               onTooltipVisibilityChange={handleTooltipVisibilityChange}
               onChatToggle={handleChatToggle}
               onSettingsToggle={handleSettingsToggle}
@@ -253,7 +305,12 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
           </div>
           {isSettingsOpen && (
             <div className="mt-4 w-full mx-auto">
-              <ModelSelector onModelChange={handleModelChange} onChatOpen={() => setIsChatOpen(true)} />
+              <ModelSelector
+                onModelChange={handleModelChange}
+                onChatOpen={() => setIsChatOpen(true)}
+                uiTheme={uiTheme}
+                onThemeChange={onThemeChange}
+              />
             </div>
           )}
 
@@ -315,6 +372,22 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
                   onChange={e => setChatInput(e.target.value)}
                   disabled={chatLoading}
                 />
+                <button
+                  type="button"
+                  className={`p-2 rounded-lg border flex items-center justify-center transition-all duration-200 backdrop-blur-sm shadow-lg disabled:opacity-50 ${
+                    isRecording
+                      ? "bg-red-500/80 hover:bg-red-600/80 border-red-400/60 animate-pulse"
+                      : "bg-gray-600/80 hover:bg-gray-700/80 border-gray-500/60"
+                  }`}
+                  onClick={handleRecordClick}
+                  disabled={chatLoading}
+                  tabIndex={-1}
+                  title={isRecording ? "Microphone is recording" : "Record microphone"}
+                  aria-label={isRecording ? "Microphone is recording" : "Record microphone"}
+                  aria-pressed={isRecording}
+                >
+                  <Mic className="w-4 h-4 text-white" />
+                </button>
                 <button
                   type="submit"
                   className="p-2 rounded-lg bg-gray-600/80 hover:bg-gray-700/80 border border-gray-500/60 flex items-center justify-center transition-all duration-200 backdrop-blur-sm shadow-lg disabled:opacity-50"

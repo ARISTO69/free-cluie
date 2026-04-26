@@ -16,6 +16,7 @@ import { ProblemStatementData } from "../types/solutions"
 import { AudioResult } from "../types/audio"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import Debug from "./Debug"
+import { UITheme } from "../types/theme"
 
 // (Using global ElectronAPI type from src/types/electron.d.ts)
 
@@ -126,8 +127,9 @@ export const ComplexitySection = ({
 
 interface SolutionsProps {
   setView: React.Dispatch<React.SetStateAction<"queue" | "solutions" | "debug">>
+  uiTheme: UITheme
 }
-const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
+const Solutions: React.FC<SolutionsProps> = ({ setView, uiTheme }) => {
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -481,12 +483,11 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
 
           {/* Navbar of commands with the SolutionsHelper */}
           <SolutionCommands
-            extraScreenshots={extraScreenshots}
             onTooltipVisibilityChange={handleTooltipVisibilityChange}
           />
 
           {/* Main Content - Modified width constraints */}
-          <div className="w-full text-sm text-black bg-black/60 rounded-md">
+          <div className={`w-full text-sm rounded-md ${uiTheme === "dark" ? "theme-content-panel" : "text-black bg-black/60"}`}>
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
                 {/* Show Screenshot or Audio Result as main output if validation_type is manual */}

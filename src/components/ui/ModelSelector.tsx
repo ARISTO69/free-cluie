@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { UITheme } from "../../types/theme";
 
 type Provider = "ollama" | "gemini" | "openrouter" | "mistral";
 
@@ -11,24 +12,34 @@ interface ModelConfig {
 interface SavedLlmSettings {
   provider: Provider;
   geminiApiKey?: string;
+  geminiModel?: string;
   openRouterApiKey?: string;
   openRouterModel?: string;
   mistralApiKey?: string;
   mistralModel?: string;
   ollamaUrl?: string;
   ollamaModel?: string;
+  systemPrompt?: string;
+  deepgramApiKey?: string;
+}
+
+interface ProviderModel {
+  id: string;
+  name?: string;
 }
 
 interface ModelSelectorProps {
   onModelChange?: (provider: Provider, model: string) => void;
   onChatOpen?: () => void;
+  uiTheme: UITheme;
+  onThemeChange: (theme: UITheme) => void;
 }
 
 const DEFAULT_OPENROUTER_MODEL = "mistralai/mistral-large";
 const DEFAULT_MISTRAL_MODEL = "mistral-large-latest";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 
-const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen }) => {
+const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen, uiTheme, onThemeChange }) => {
   const [currentConfig, setCurrentConfig] = useState<ModelConfig | null>(null);
   const [savedSettings, setSavedSettings] = useState<SavedLlmSettings | null>(null);
   const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
@@ -42,11 +53,32 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
   const [mistralApiKey, setMistralApiKey] = useState("");
   const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
   const [mistralModel, setMistralModel] = useState(DEFAULT_MISTRAL_MODEL);
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [systemPromptStatus, setSystemPromptStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [deepgramApiKey, setDeepgramApiKey] = useState("");
+  const [deepgramStatus, setDeepgramStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [availableModels, setAvailableModels] = useState<ProviderModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadCurrentConfig();
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
   const getProviderLabel = (provider: Provider) => {
@@ -71,8 +103,72 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       case "mistral":
         return mistralModel;
       default:
-        return DEFAULT_GEMINI_MODEL;
+        return geminiModel;
     }
+  };
+
+  const getApiKeyForProvider = (provider: Provider, saved?: SavedLlmSettings | null) => {
+    if (provider === "gemini") return geminiApiKey || saved?.geminiApiKey;
+    if (provider === "openrouter") return openRouterApiKey || saved?.openRouterApiKey;
+    if (provider === "mistral") return mistralApiKey || saved?.mistralApiKey;
+    return undefined;
+  };
+
+  const selectDefaultModel = (provider: Provider, models: ProviderModel[]) => {
+    if (models.length === 0) return;
+    const ids = models.map((model) => model.id);
+
+    if (provider === "gemini" && !ids.includes(geminiModel)) {
+      setGeminiModel(ids.includes(DEFAULT_GEMINI_MODEL) ? DEFAULT_GEMINI_MODEL : ids[0]);
+    }
+    if (provider === "openrouter" && !ids.includes(openRouterModel)) {
+      setOpenRouterModel(ids.includes(DEFAULT_OPENROUTER_MODEL) ? DEFAULT_OPENROUTER_MODEL : ids[0]);
+    }
+    if (provider === "mistral" && !ids.includes(mistralModel)) {
+      setMistralModel(ids.includes(DEFAULT_MISTRAL_MODEL) ? DEFAULT_MISTRAL_MODEL : ids[0]);
+    }
+    if (provider === "ollama" && !ids.includes(selectedOllamaModel)) {
+      setSelectedOllamaModel(ids[0]);
+    }
+  };
+
+  const loadProviderModels = async (provider: Provider, saved?: SavedLlmSettings | null) => {
+    try {
+      setIsLoadingModels(true);
+      const models = await window.electronAPI.getAvailableProviderModels(provider, {
+        apiKey: getApiKeyForProvider(provider, saved),
+        ollamaUrl: saved?.ollamaUrl || ollamaUrl
+      });
+      setAvailableModels(models);
+      selectDefaultModel(provider, models);
+      if (provider === "ollama") {
+        setAvailableOllamaModels(models.map((model) => model.id));
+      }
+    } catch (error) {
+      console.error("Error loading provider models:", error);
+      setAvailableModels([]);
+      if (provider === "ollama") {
+        setAvailableOllamaModels([]);
+      }
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  const handleProviderSelect = (provider: Provider) => {
+    setSelectedProvider(provider);
+    setModelSearch("");
+    setIsModelMenuOpen(false);
+    loadProviderModels(provider, savedSettings);
+  };
+
+  const setModelForProvider = (provider: Provider, model: string) => {
+    if (provider === "gemini") setGeminiModel(model);
+    if (provider === "ollama") setSelectedOllamaModel(model);
+    if (provider === "openrouter") setOpenRouterModel(model);
+    if (provider === "mistral") setMistralModel(model);
+    setModelSearch("");
+    setIsModelMenuOpen(false);
   };
 
   const loadCurrentConfig = async () => {
@@ -87,9 +183,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       if (saved?.geminiApiKey) {
         setGeminiApiKey(saved.geminiApiKey);
       }
+      if (config.provider === "gemini") {
+        setGeminiModel(config.model);
+      } else if (saved?.geminiModel) {
+        setGeminiModel(saved.geminiModel);
+      }
       if (config.provider === "ollama") {
         setSelectedOllamaModel(config.model);
-        await loadOllamaModels();
       }
       if (saved?.ollamaUrl) {
         setOllamaUrl(saved.ollamaUrl);
@@ -113,6 +213,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       if (saved?.mistralApiKey) {
         setMistralApiKey(saved.mistralApiKey);
       }
+      setSystemPrompt(saved?.systemPrompt || "");
+      setDeepgramApiKey(saved?.deepgramApiKey || "");
+      await loadProviderModels(config.provider, saved);
     } catch (error) {
       console.error("Error loading current config:", error);
     } finally {
@@ -124,6 +227,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     try {
       const models = await window.electronAPI.getAvailableOllamaModels();
       setAvailableOllamaModels(models);
+      setAvailableModels(models.map((id) => ({ id })));
       if (models.length > 0 && !selectedOllamaModel) {
         setSelectedOllamaModel(models[0]);
       }
@@ -161,7 +265,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       } else if (selectedProvider === "mistral") {
         result = await window.electronAPI.switchToMistral(mistralApiKey || savedSettings?.mistralApiKey || "", mistralModel);
       } else {
-        result = await window.electronAPI.switchToGemini(geminiApiKey || savedSettings?.geminiApiKey || undefined);
+        result = await window.electronAPI.switchToGemini(geminiApiKey || savedSettings?.geminiApiKey || undefined, geminiModel);
       }
 
       if (result.success) {
@@ -177,6 +281,46 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       }
     } catch (error) {
       setConnectionStatus("error");
+      setErrorMessage(String(error));
+    }
+  };
+
+  const handleSystemPromptSave = async () => {
+    try {
+      setSystemPromptStatus("saving");
+      const result = await window.electronAPI.saveSystemPrompt(systemPrompt);
+      if (result.success) {
+        setSystemPromptStatus("saved");
+        setSavedSettings((settings) => ({
+          ...(settings || { provider: selectedProvider }),
+          systemPrompt
+        }));
+      } else {
+        setSystemPromptStatus("error");
+        setErrorMessage(result.error || "Failed to save system prompt");
+      }
+    } catch (error) {
+      setSystemPromptStatus("error");
+      setErrorMessage(String(error));
+    }
+  };
+
+  const handleDeepgramSave = async () => {
+    try {
+      setDeepgramStatus("saving");
+      const result = await window.electronAPI.saveDeepgramApiKey(deepgramApiKey);
+      if (result.success) {
+        setDeepgramStatus("saved");
+        setSavedSettings((settings) => ({
+          ...(settings || { provider: selectedProvider }),
+          deepgramApiKey
+        }));
+      } else {
+        setDeepgramStatus("error");
+        setErrorMessage(result.error || "Failed to save Deepgram API key");
+      }
+    } catch (error) {
+      setDeepgramStatus("error");
       setErrorMessage(String(error));
     }
   };
@@ -207,16 +351,135 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     }
   };
 
+  const modelOptions = availableModels.some((model) => model.id === getModelForProvider(selectedProvider))
+    ? availableModels
+    : getModelForProvider(selectedProvider)
+      ? [{ id: getModelForProvider(selectedProvider) }, ...availableModels]
+      : availableModels;
+
+  const filteredModelOptions = modelSearch.trim()
+    ? modelOptions.filter((model) => {
+        const search = modelSearch.trim().toLowerCase();
+        return (
+          model.id.toLowerCase().includes(search) ||
+          (model.name || "").toLowerCase().includes(search)
+        );
+      })
+    : modelOptions;
+
+  const getModelLabel = (modelId: string) => {
+    const model = modelOptions.find((option) => option.id === modelId);
+    if (!model) return modelId;
+    return model.name && model.name !== model.id ? `${model.name} (${model.id})` : model.id;
+  };
+
+  const renderModelPicker = () => (
+    <div className="relative mt-1" ref={modelMenuRef}>
+      <button
+        type="button"
+        onClick={() => setIsModelMenuOpen((open) => !open)}
+        className={`w-full px-3 py-2 text-xs border rounded text-left focus:outline-none focus:ring-2 focus:ring-blue-400/60 ${
+          uiTheme === "dark"
+            ? "bg-black/50 border-white/20 text-white"
+            : "bg-white/40 border-white/60 text-gray-800"
+        }`}
+      >
+        <span className="block truncate">{getModelLabel(getModelForProvider(selectedProvider))}</span>
+      </button>
+
+      {isModelMenuOpen && (
+        <div
+          className={`absolute z-50 mt-1 w-full rounded border shadow-lg backdrop-blur-md ${
+            uiTheme === "dark"
+              ? "border-white/20 bg-black/95"
+              : "border-white/60 bg-white/95"
+          }`}
+        >
+          <div className="p-2">
+            <input
+              type="search"
+              value={modelSearch}
+              onChange={(e) => setModelSearch(e.target.value)}
+              placeholder={`Search ${getProviderLabel(selectedProvider)} models...`}
+              className={`w-full px-3 py-2 text-xs border rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60 ${
+                uiTheme === "dark"
+                  ? "bg-zinc-900 border-white/20 text-white placeholder:text-white/40"
+                  : "bg-white border-gray-200 text-gray-800"
+              }`}
+              autoFocus
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filteredModelOptions.length > 0 ? (
+              filteredModelOptions.map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => setModelForProvider(selectedProvider, model.id)}
+                  className={`w-full px-3 py-2 text-left text-xs ${
+                    uiTheme === "dark"
+                      ? model.id === getModelForProvider(selectedProvider)
+                        ? "bg-white/15 text-white"
+                        : "text-white/85 hover:bg-white/10"
+                      : model.id === getModelForProvider(selectedProvider)
+                        ? "bg-blue-100 text-blue-800"
+                        : "text-gray-800 hover:bg-blue-50"
+                  }`}
+                >
+                  <span className="block truncate">
+                    {model.name && model.name !== model.id ? model.name : model.id}
+                  </span>
+                  {model.name && model.name !== model.id && (
+                    <span className={`block truncate text-[10px] ${uiTheme === "dark" ? "text-white/50" : "text-gray-500"}`}>
+                      {model.id}
+                    </span>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className={`px-3 py-2 text-xs ${uiTheme === "dark" ? "text-white/50" : "text-gray-500"}`}>
+                No matching models
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+    );
+
   if (isLoading) {
     return (
-      <div className="p-4 bg-white/20 backdrop-blur-md rounded-lg border border-white/30">
+      <div className="settings-panel p-4 bg-white/20 backdrop-blur-md rounded-lg border border-white/30">
         <div className="animate-pulse text-sm text-gray-600">Loading model configuration...</div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-white/20 backdrop-blur-md rounded-lg border border-white/30 space-y-4">
+    <div className="settings-panel p-4 bg-white/20 backdrop-blur-md rounded-lg border border-white/30 space-y-4">
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-800">Appearance</h3>
+        <button
+          type="button"
+          onClick={() => onThemeChange(uiTheme === "dark" ? "translucent" : "dark")}
+          className="flex w-full items-center justify-between rounded bg-white/40 px-3 py-2 text-xs text-gray-700 transition-all hover:bg-white/60"
+          aria-pressed={uiTheme === "dark"}
+        >
+          <span>Dark mode</span>
+          <span
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full p-0.5 transition-colors ${
+              uiTheme === "dark" ? "bg-blue-500" : "bg-gray-400"
+            }`}
+          >
+            <span
+              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                uiTheme === "dark" ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </span>
+        </button>
+      </div>
+
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">AI Model Selection</h3>
         <div className={`text-xs ${getStatusColor()}`}>{getStatusText()}</div>
@@ -228,54 +491,45 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
         <label className="text-xs font-medium text-gray-700">Provider</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setSelectedProvider("gemini")}
-            className={`px-3 py-2 rounded text-xs transition-all ${
-              selectedProvider === "gemini" ? "bg-blue-500 text-white shadow-md" : "bg-white/40 text-gray-700 hover:bg-white/60"
-            }`}
-          >
-            Gemini
-          </button>
-          <button
-            onClick={() => setSelectedProvider("ollama")}
-            className={`px-3 py-2 rounded text-xs transition-all ${
-              selectedProvider === "ollama" ? "bg-green-500 text-white shadow-md" : "bg-white/40 text-gray-700 hover:bg-white/60"
-            }`}
-          >
-            Ollama
-          </button>
-          <button
-            onClick={() => setSelectedProvider("openrouter")}
-            className={`px-3 py-2 rounded text-xs transition-all ${
-              selectedProvider === "openrouter" ? "bg-orange-500 text-white shadow-md" : "bg-white/40 text-gray-700 hover:bg-white/60"
-            }`}
-          >
-            OpenRouter
-          </button>
-          <button
-            onClick={() => setSelectedProvider("mistral")}
-            className={`px-3 py-2 rounded text-xs transition-all ${
-              selectedProvider === "mistral" ? "bg-rose-500 text-white shadow-md" : "bg-white/40 text-gray-700 hover:bg-white/60"
-            }`}
-          >
-            Mistral
-          </button>
-        </div>
+        <select
+          value={selectedProvider}
+          onChange={(e) => handleProviderSelect(e.target.value as Provider)}
+          className="w-40 px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+        >
+          <option value="gemini">Gemini</option>
+          <option value="ollama">Ollama</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="mistral">Mistral</option>
+        </select>
       </div>
 
       {selectedProvider === "gemini" && (
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-700">Gemini API Key (optional if already set)</label>
-          <input
-            type="password"
-            placeholder="Enter API key to update..."
-            value={geminiApiKey}
-            onChange={(e) => setGeminiApiKey(e.target.value)}
-            className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
-          />
+          <div>
+            <label className="text-xs font-medium text-gray-700">Gemini API Key (optional if already set)</label>
+            <input
+              type="password"
+              placeholder="Enter API key to update..."
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Model</label>
+              <button
+                onClick={() => loadProviderModels("gemini", savedSettings)}
+                className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
+                title="Refresh models"
+              >
+                {isLoadingModels ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+            {renderModelPicker()}
+          </div>
         </div>
       )}
 
@@ -294,25 +548,15 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
             <div className="flex items-center gap-2">
               <label className="text-xs font-medium text-gray-700">Model</label>
               <button
-                onClick={loadOllamaModels}
+                onClick={() => loadProviderModels("ollama", savedSettings)}
                 className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
                 title="Refresh models"
               >
-                Refresh
+                {isLoadingModels ? "Loading..." : "Refresh"}
               </button>
             </div>
-            {availableOllamaModels.length > 0 ? (
-              <select
-                value={selectedOllamaModel}
-                onChange={(e) => setSelectedOllamaModel(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-green-400/60"
-              >
-                {availableOllamaModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
+            {modelOptions.length > 0 ? (
+              renderModelPicker()
             ) : (
               <div className="text-xs text-gray-600 bg-yellow-100/60 p-2 rounded">
                 No Ollama models found. Make sure Ollama is running and models are installed.
@@ -335,13 +579,17 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-700">Model</label>
-            <input
-              type="text"
-              value={openRouterModel}
-              onChange={(e) => setOpenRouterModel(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-orange-400/60"
-            />
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Model</label>
+              <button
+                onClick={() => loadProviderModels("openrouter", savedSettings)}
+                className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
+                title="Refresh models"
+              >
+                {isLoadingModels ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+            {renderModelPicker()}
           </div>
         </div>
       )}
@@ -359,13 +607,54 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-700">Model</label>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Model</label>
+              <button
+                onClick={() => loadProviderModels("mistral", savedSettings)}
+                className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
+                title="Refresh models"
+              >
+                {isLoadingModels ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+            {renderModelPicker()}
+          </div>
+        </div>
+      )}
+
+      {selectedProvider !== "gemini" && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs font-medium text-gray-700">Deepgram API Key</label>
+            <span className="text-[10px] text-gray-600">
+              {deepgramStatus === "saving"
+                ? "Saving..."
+                : deepgramStatus === "saved"
+                  ? "Saved"
+                  : deepgramStatus === "error"
+                    ? "Save failed"
+                    : "For microphone"}
+            </span>
+          </div>
+          <div className="flex gap-2">
             <input
-              type="text"
-              value={mistralModel}
-              onChange={(e) => setMistralModel(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+              type="password"
+              placeholder="Enter Deepgram API key..."
+              value={deepgramApiKey}
+              onChange={(e) => {
+                setDeepgramApiKey(e.target.value);
+                setDeepgramStatus("idle");
+              }}
+              className="min-w-0 flex-1 px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
             />
+            <button
+              type="button"
+              onClick={handleDeepgramSave}
+              disabled={deepgramStatus === "saving"}
+              className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white text-xs rounded transition-all shadow-md"
+            >
+              Save
+            </button>
           </div>
         </div>
       )}
@@ -387,12 +676,38 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         </button>
       </div>
 
-      <div className="text-xs text-gray-600 space-y-1">
-        <div><strong>Gemini:</strong> Fast, cloud-based, requires API key</div>
-        <div><strong>Ollama:</strong> Private, local, requires Ollama installation</div>
-        <div><strong>OpenRouter:</strong> OpenAI-compatible routing with provider/model choice</div>
-        <div><strong>Mistral:</strong> Direct Mistral API access with Mistral models</div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-xs font-medium text-gray-700">System Prompt</label>
+          <span className="text-[10px] text-gray-600">
+            {systemPromptStatus === "saving"
+              ? "Saving..."
+              : systemPromptStatus === "saved"
+                ? "Saved"
+                : systemPromptStatus === "error"
+                  ? "Save failed"
+                  : "Optional"}
+          </span>
+        </div>
+        <textarea
+          value={systemPrompt}
+          onChange={(e) => {
+            setSystemPrompt(e.target.value);
+            setSystemPromptStatus("idle");
+          }}
+          placeholder="Example: Answer concisely in bullet points, include assumptions, and avoid long explanations unless asked."
+          className="w-full min-h-[92px] resize-y px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+        />
+        <button
+          type="button"
+          onClick={handleSystemPromptSave}
+          disabled={systemPromptStatus === "saving"}
+          className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white text-xs rounded transition-all shadow-md"
+        >
+          {systemPromptStatus === "saving" ? "Saving Prompt..." : "Save System Prompt"}
+        </button>
       </div>
+
     </div>
   );
 };

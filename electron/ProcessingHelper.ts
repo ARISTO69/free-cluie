@@ -21,30 +21,81 @@ export class ProcessingHelper {
     this.appState = appState
 
     const savedSettings = this.appState.getSettingsHelper().getLlmSettings()
+    const savedSystemPrompt = savedSettings?.systemPrompt
     const useOllama = process.env.USE_OLLAMA === "true"
     const openRouterKey = process.env.OPENROUTER_API_KEY
     const mistralKey = process.env.MISTRAL_API_KEY
     const geminiKey = process.env.GEMINI_API_KEY
+    const deepgramKey = process.env.DEEPGRAM_API_KEY || savedSettings?.deepgramApiKey
 
     if (useOllama) {
       const ollamaModel = process.env.OLLAMA_MODEL
       const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434"
       console.log("[ProcessingHelper] Initializing with Ollama")
-      this.llmHelper = new LLMHelper(undefined, true, ollamaModel, ollamaUrl)
+      this.llmHelper = new LLMHelper(
+        undefined,
+        true,
+        ollamaModel,
+        ollamaUrl,
+        false,
+        undefined,
+        false,
+        undefined,
+        savedSystemPrompt,
+        undefined,
+        deepgramKey
+      )
 
     } else if (openRouterKey) {
       const model = process.env.OPENROUTER_MODEL || "mistralai/mistral-large"
       console.log(`[ProcessingHelper] Initializing with OpenRouter (${model})`)
-      this.llmHelper = new LLMHelper(openRouterKey, false, undefined, undefined, true, model)
+      this.llmHelper = new LLMHelper(
+        openRouterKey,
+        false,
+        undefined,
+        undefined,
+        true,
+        model,
+        false,
+        undefined,
+        savedSystemPrompt,
+        undefined,
+        deepgramKey
+      )
 
     } else if (mistralKey) {
       const model = process.env.MISTRAL_MODEL || "mistral-large-latest"
       console.log(`[ProcessingHelper] Initializing with Mistral (${model})`)
-      this.llmHelper = new LLMHelper(mistralKey, false, undefined, undefined, false, undefined, true, model)
+      this.llmHelper = new LLMHelper(
+        mistralKey,
+        false,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        true,
+        model,
+        savedSystemPrompt,
+        undefined,
+        deepgramKey
+      )
 
     } else if (geminiKey) {
-      console.log("[ProcessingHelper] Initializing with Gemini")
-      this.llmHelper = new LLMHelper(geminiKey, false)
+      const model = process.env.GEMINI_MODEL || savedSettings?.geminiModel
+      console.log(`[ProcessingHelper] Initializing with Gemini${model ? ` (${model})` : ""}`)
+      this.llmHelper = new LLMHelper(
+        geminiKey,
+        false,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        false,
+        undefined,
+        savedSystemPrompt,
+        model,
+        deepgramKey
+      )
 
     } else if (savedSettings) {
       console.log(`[ProcessingHelper] Initializing from saved ${savedSettings.provider} settings`)
@@ -63,7 +114,19 @@ export class ProcessingHelper {
 
   private createLlmHelperFromSavedSettings(settings: LlmSettings): LLMHelper {
     if (settings.provider === "ollama") {
-      return new LLMHelper(undefined, true, settings.ollamaModel, settings.ollamaUrl)
+      return new LLMHelper(
+        undefined,
+        true,
+        settings.ollamaModel,
+        settings.ollamaUrl,
+        false,
+        undefined,
+        false,
+        undefined,
+        settings.systemPrompt,
+        undefined,
+        settings.deepgramApiKey
+      )
     }
 
     if (settings.provider === "openrouter") {
@@ -76,7 +139,12 @@ export class ProcessingHelper {
         undefined,
         undefined,
         true,
-        settings.openRouterModel
+        settings.openRouterModel,
+        false,
+        undefined,
+        settings.systemPrompt,
+        undefined,
+        settings.deepgramApiKey
       )
     }
 
@@ -92,7 +160,10 @@ export class ProcessingHelper {
         false,
         undefined,
         true,
-        settings.mistralModel
+        settings.mistralModel,
+        settings.systemPrompt,
+        undefined,
+        settings.deepgramApiKey
       )
     }
 
@@ -100,7 +171,19 @@ export class ProcessingHelper {
       throw new Error("Saved Gemini settings are missing the API key")
     }
 
-    return new LLMHelper(settings.geminiApiKey, false)
+    return new LLMHelper(
+      settings.geminiApiKey,
+      false,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      false,
+      undefined,
+      settings.systemPrompt,
+      settings.geminiModel,
+      settings.deepgramApiKey
+    )
   }
 
   // ── Everything below is UNCHANGED from original ──────────────────────────────

@@ -27,6 +27,22 @@ export class WindowHelper {
     this.appState = appState
   }
 
+  private shouldAlwaysOnTop(): boolean {
+    return this.appState.getSettingsHelper().getWindowSettings().alwaysOnTop
+  }
+
+  private applyAlwaysOnTop(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+
+    const alwaysOnTop = this.shouldAlwaysOnTop()
+    if (process.platform === "darwin" && alwaysOnTop) {
+      this.mainWindow.setAlwaysOnTop(true, "floating")
+      return
+    }
+
+    this.mainWindow.setAlwaysOnTop(alwaysOnTop)
+  }
+
   public setWindowDimensions(width: number, height: number): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
@@ -84,7 +100,7 @@ export class WindowHelper {
         preload: path.join(__dirname, "preload.js")
       },
       show: false, // Start hidden, then show after setup
-      alwaysOnTop: true,
+      alwaysOnTop: this.shouldAlwaysOnTop(),
       frame: false,
       transparent: true,
       fullscreenable: false,
@@ -106,7 +122,7 @@ export class WindowHelper {
         visibleOnFullScreen: true
       })
       this.mainWindow.setHiddenInMissionControl(true)
-      this.mainWindow.setAlwaysOnTop(true, "floating")
+      this.applyAlwaysOnTop()
     }
     if (process.platform === "linux") {
       // Linux-specific optimizations for better compatibility
@@ -117,7 +133,7 @@ export class WindowHelper {
       this.mainWindow.setFocusable(true)
     } 
     this.mainWindow.setSkipTaskbar(true)
-    this.mainWindow.setAlwaysOnTop(true)
+    this.applyAlwaysOnTop()
 
     this.mainWindow.loadURL(startUrl).catch((err) => {
       console.error("Failed to load URL:", err)
@@ -130,7 +146,7 @@ export class WindowHelper {
         this.centerWindow()
         this.mainWindow.show()
         this.mainWindow.focus()
-        this.mainWindow.setAlwaysOnTop(true)
+        this.applyAlwaysOnTop()
         console.log("Window is now visible and centered")
       }
     })
@@ -209,6 +225,7 @@ export class WindowHelper {
     }
 
     this.mainWindow.showInactive()
+    this.applyAlwaysOnTop()
 
     this.isWindowVisible = true
   }
@@ -262,10 +279,15 @@ export class WindowHelper {
     this.centerWindow()
     this.mainWindow.show()
     this.mainWindow.focus()
-    this.mainWindow.setAlwaysOnTop(true)
+    this.applyAlwaysOnTop()
     this.isWindowVisible = true
     
     console.log(`Window centered and shown`)
+  }
+
+  public setAlwaysOnTop(alwaysOnTop: boolean): void {
+    this.appState.getSettingsHelper().saveWindowSettings({ alwaysOnTop })
+    this.applyAlwaysOnTop()
   }
 
   // New methods for window movement

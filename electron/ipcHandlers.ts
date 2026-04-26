@@ -26,9 +26,34 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const screenshotPath = await appState.takeScreenshot()
       const preview = await appState.getImagePreview(screenshotPath)
+      const mainWindow = appState.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screenshot-taken", {
+          path: screenshotPath,
+          preview
+        })
+      }
       return { path: screenshotPath, preview }
     } catch (error) {
       console.error("Error taking screenshot:", error)
+      throw error
+    }
+  })
+
+  ipcMain.handle("take-area-screenshot", async () => {
+    try {
+      const screenshotPath = await appState.takeAreaScreenshot()
+      const preview = await appState.getImagePreview(screenshotPath)
+      const mainWindow = appState.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screenshot-taken", {
+          path: screenshotPath,
+          preview
+        })
+      }
+      return { path: screenshotPath, preview }
+    } catch (error) {
+      console.error("Error taking area screenshot:", error)
       throw error
     }
   })
@@ -62,6 +87,56 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   ipcMain.handle("toggle-window", async () => {
     appState.toggleMainWindow()
+  })
+
+  ipcMain.handle("save-system-prompt", async (_, systemPrompt: string) => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper()
+      const existing = appState.getSettingsHelper().getLlmSettings()
+      saveLlmSettings({
+        provider: existing?.provider || llmHelper.getCurrentProvider(),
+        geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
+        openRouterApiKey: existing?.openRouterApiKey,
+        openRouterModel: existing?.openRouterModel,
+        mistralApiKey: existing?.mistralApiKey,
+        mistralModel: existing?.mistralModel,
+        ollamaModel: existing?.ollamaModel,
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt,
+        deepgramApiKey: existing?.deepgramApiKey
+      })
+      llmHelper.setSystemPrompt(systemPrompt)
+      return { success: true }
+    } catch (error: any) {
+      console.error("Error saving system prompt:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("save-deepgram-api-key", async (_, deepgramApiKey: string) => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper()
+      const existing = appState.getSettingsHelper().getLlmSettings()
+      saveLlmSettings({
+        provider: existing?.provider || llmHelper.getCurrentProvider(),
+        geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
+        openRouterApiKey: existing?.openRouterApiKey,
+        openRouterModel: existing?.openRouterModel,
+        mistralApiKey: existing?.mistralApiKey,
+        mistralModel: existing?.mistralModel,
+        ollamaModel: existing?.ollamaModel,
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt: existing?.systemPrompt,
+        deepgramApiKey
+      })
+      llmHelper.setDeepgramApiKey(deepgramApiKey)
+      return { success: true }
+    } catch (error: any) {
+      console.error("Error saving Deepgram API key:", error)
+      return { success: false, error: error.message }
+    }
   })
 
   ipcMain.handle("reset-queues", async () => {
@@ -167,6 +242,25 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  ipcMain.handle("get-window-settings", async () => {
+    try {
+      return appState.getSettingsHelper().getWindowSettings();
+    } catch (error: any) {
+      console.error("Error getting window settings:", error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle("set-always-on-top", async (_, alwaysOnTop: boolean) => {
+    try {
+      appState.setAlwaysOnTop(alwaysOnTop);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error setting always-on-top:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle("get-available-ollama-models", async () => {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper();
@@ -178,6 +272,23 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  ipcMain.handle(
+    "get-available-provider-models",
+    async (
+      _,
+      provider: "ollama" | "gemini" | "openrouter" | "mistral",
+      options?: { apiKey?: string; ollamaUrl?: string }
+    ) => {
+      try {
+        const llmHelper = appState.processingHelper.getLLMHelper();
+        return llmHelper.getAvailableModels(provider, options || {});
+      } catch (error: any) {
+        console.error("Error getting provider models:", error);
+        throw error;
+      }
+    }
+  );
+
   ipcMain.handle("switch-to-ollama", async (_, model?: string, url?: string) => {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper();
@@ -186,13 +297,17 @@ export function initializeIpcHandlers(appState: AppState): void {
       saveLlmSettings({
         provider: "ollama",
         geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
         openRouterApiKey: existing?.openRouterApiKey,
         openRouterModel: existing?.openRouterModel,
         mistralApiKey: existing?.mistralApiKey,
         mistralModel: existing?.mistralModel,
         ollamaModel: model || llmHelper.getCurrentModel(),
-        ollamaUrl: url || existing?.ollamaUrl || "http://localhost:11434"
+        ollamaUrl: url || existing?.ollamaUrl || "http://localhost:11434",
+        systemPrompt: existing?.systemPrompt,
+        deepgramApiKey: existing?.deepgramApiKey
       });
+      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Ollama:", error);
@@ -200,22 +315,26 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  ipcMain.handle("switch-to-gemini", async (_, apiKey?: string) => {
+  ipcMain.handle("switch-to-gemini", async (_, apiKey?: string, model?: string) => {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper();
       const existing = appState.getSettingsHelper().getLlmSettings();
       const geminiApiKey = apiKey || existing?.geminiApiKey;
-      await llmHelper.switchToGemini(geminiApiKey);
+      await llmHelper.switchToGemini(geminiApiKey, model || existing?.geminiModel);
       saveLlmSettings({
         provider: "gemini",
         geminiApiKey,
+        geminiModel: model || existing?.geminiModel || llmHelper.getCurrentModel(),
         openRouterApiKey: existing?.openRouterApiKey,
         openRouterModel: existing?.openRouterModel,
         mistralApiKey: existing?.mistralApiKey,
         mistralModel: existing?.mistralModel,
         ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt: existing?.systemPrompt,
+        deepgramApiKey: existing?.deepgramApiKey
       });
+      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Gemini:", error);
@@ -233,13 +352,17 @@ export function initializeIpcHandlers(appState: AppState): void {
       saveLlmSettings({
         provider: "openrouter",
         geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
         openRouterApiKey,
         openRouterModel: openRouterModel || llmHelper.getCurrentModel(),
         mistralApiKey: existing?.mistralApiKey,
         mistralModel: existing?.mistralModel,
         ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt: existing?.systemPrompt,
+        deepgramApiKey: existing?.deepgramApiKey
       });
+      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to OpenRouter:", error);
@@ -257,13 +380,17 @@ export function initializeIpcHandlers(appState: AppState): void {
       saveLlmSettings({
         provider: "mistral",
         geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
         openRouterApiKey: existing?.openRouterApiKey,
         openRouterModel: existing?.openRouterModel,
         mistralApiKey,
         mistralModel: mistralModel || llmHelper.getCurrentModel(),
         ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt: existing?.systemPrompt,
+        deepgramApiKey: existing?.deepgramApiKey
       });
+      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Mistral:", error);

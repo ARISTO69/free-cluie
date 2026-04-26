@@ -140,6 +140,10 @@ export class AppState {
     this.windowHelper.setWindowDimensions(width, height)
   }
 
+  public setAlwaysOnTop(alwaysOnTop: boolean): void {
+    this.windowHelper.setAlwaysOnTop(alwaysOnTop)
+  }
+
   public clearQueues(): void {
     this.screenshotHelper.clearQueues()
 
@@ -155,6 +159,17 @@ export class AppState {
     if (!this.getMainWindow()) throw new Error("No main window available")
 
     const screenshotPath = await this.screenshotHelper.takeScreenshot(
+      () => this.hideMainWindow(),
+      () => this.showMainWindow()
+    )
+
+    return screenshotPath
+  }
+
+  public async takeAreaScreenshot(): Promise<string> {
+    if (!this.getMainWindow()) throw new Error("No main window available")
+
+    const screenshotPath = await this.screenshotHelper.takeAreaScreenshot(
       () => this.hideMainWindow(),
       () => this.showMainWindow()
     )

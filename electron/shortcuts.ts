@@ -32,6 +32,23 @@ export class ShortcutsHelper {
       }
     })
 
+    globalShortcut.register("CommandOrControl+Shift+H", async () => {
+      const mainWindow = this.appState.getMainWindow()
+      if (mainWindow) {
+        console.log("Taking area screenshot...")
+        try {
+          const screenshotPath = await this.appState.takeAreaScreenshot()
+          const preview = await this.appState.getImagePreview(screenshotPath)
+          mainWindow.webContents.send("screenshot-taken", {
+            path: screenshotPath,
+            preview
+          })
+        } catch (error) {
+          console.error("Error capturing area screenshot:", error)
+        }
+      }
+    })
+
     globalShortcut.register("CommandOrControl+Enter", async () => {
       await this.appState.processingHelper.processScreenshots()
     })

@@ -18,12 +18,22 @@ export interface ElectronAPI {
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: () => Promise<void>
+  takeAreaScreenshot: () => Promise<{ path: string; preview: string }>
+  toggleWindow: () => Promise<void>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
   moveWindowUp: () => Promise<void>
   moveWindowDown: () => Promise<void>
   analyzeAudioFromBase64: (data: string, mimeType: string) => Promise<{ text: string; timestamp: number }>
   analyzeAudioFile: (path: string) => Promise<{ text: string; timestamp: number }>
+  saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+  saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
+  getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
+  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>
+  getAvailableProviderModels: (
+    provider: "ollama" | "gemini" | "openrouter" | "mistral",
+    options?: { apiKey?: string; ollamaUrl?: string }
+  ) => Promise<Array<{ id: string; name?: string }>>
   quitApp: () => Promise<void>
   invoke: (channel: string, ...args: any[]) => Promise<any>
 }
