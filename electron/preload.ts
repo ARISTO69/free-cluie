@@ -50,6 +50,9 @@ interface ElectronAPI {
     ollamaUrl?: string
     ollamaModel?: string
     systemPrompt?: string
+    chatSystemPrompt?: string
+    practicalSystemPrompt?: string
+    systemPromptsEnabled?: boolean
     deepgramApiKey?: string
   } | null>
   getAvailableOllamaModels: () => Promise<string[]>
@@ -62,6 +65,7 @@ interface ElectronAPI {
   switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+  saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => Promise<{ success: boolean; error?: string }>
   saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
   setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>
@@ -218,6 +222,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   switchToOpenRouter: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-openrouter", apiKey, model),
   switchToMistral: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-mistral", apiKey, model),
   saveSystemPrompt: (systemPrompt: string) => ipcRenderer.invoke("save-system-prompt", systemPrompt),
+  saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => ipcRenderer.invoke("save-system-prompts", prompts),
   saveDeepgramApiKey: (apiKey: string) => ipcRenderer.invoke("save-deepgram-api-key", apiKey),
   getWindowSettings: () => ipcRenderer.invoke("get-window-settings"),
   setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.invoke("set-always-on-top", alwaysOnTop),

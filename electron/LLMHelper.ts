@@ -55,7 +55,9 @@ interface OpenAIContentPart {
 export class LLMHelper {
   private provider: Provider = "gemini"
   private readonly defaultSystemPrompt = `You are Wingman AI, a helpful, proactive assistant for any kind of problem or situation (not just coding). For any user input, analyze the situation, provide a clear problem statement, relevant context, and suggest several possible responses or actions the user could take next. Always explain your reasoning. Present your suggestions as a list of options or next steps.`
-  private customSystemPrompt: string = ""
+  private chatSystemPrompt: string = ""
+  private practicalSystemPrompt: string = ""
+  private systemPromptsEnabled: boolean = true
 
   // Gemini
   private geminiModel: any = null
@@ -82,9 +84,13 @@ export class LLMHelper {
     mistralModel?: string,
     systemPrompt?: string,
     geminiModel?: string,
-    deepgramApiKey?: string
+    deepgramApiKey?: string,
+    practicalSystemPrompt?: string,
+    systemPromptsEnabled: boolean = true
   ) {
-    this.setSystemPrompt(systemPrompt || "")
+    this.setSystemPromptsEnabled(systemPromptsEnabled)
+    this.setChatSystemPrompt(systemPrompt || "")
+    this.setPracticalSystemPrompt(practicalSystemPrompt || systemPrompt || "")
     this.geminiModelName = geminiModel || this.geminiModelName
     this.deepgramApiKey = deepgramApiKey || ""
 
@@ -128,18 +134,31 @@ export class LLMHelper {
     return text.trim()
   }
 
-  private getSystemPrompt(): string {
-    const custom = this.customSystemPrompt.trim()
+  private getSystemPrompt(customPrompt = this.chatSystemPrompt): string {
+    if (!this.systemPromptsEnabled) return this.defaultSystemPrompt
+    const custom = customPrompt.trim()
     if (!custom) return this.defaultSystemPrompt
     return `${this.defaultSystemPrompt}\n\nAdditional user instructions:\n${custom}`
   }
 
   public setSystemPrompt(prompt: string): void {
-    this.customSystemPrompt = prompt.trim()
+    this.setChatSystemPrompt(prompt)
+  }
+
+  public setChatSystemPrompt(prompt: string): void {
+    this.chatSystemPrompt = prompt.trim()
+  }
+
+  public setPracticalSystemPrompt(prompt: string): void {
+    this.practicalSystemPrompt = prompt.trim()
+  }
+
+  public setSystemPromptsEnabled(enabled: boolean): void {
+    this.systemPromptsEnabled = enabled
   }
 
   public getCustomSystemPrompt(): string {
-    return this.customSystemPrompt
+    return this.chatSystemPrompt
   }
 
   public setDeepgramApiKey(apiKey: string): void {
@@ -361,6 +380,35 @@ export class LLMHelper {
       }
     } catch (error: any) {
       console.error("[LLMHelper] Error in chat:", error)
+      throw error
+    }
+  }
+
+  public async practicalChat(message: string, memory: string): Promise<string> {
+    const prompt = `${this.getSystemPrompt(this.practicalSystemPrompt)}
+
+You are in Practical Exam mode. Guide the user step by step so they can complete their experiment in a practical exam. Be specific, sequential, and focused on the user's immediate requirement. If prior output exists in memory, use it as the source of continuity and avoid restarting unless the user asks.
+
+Practical memory from previous outputs:
+${memory.trim() || "No previous practical output saved yet."}
+
+User's current requirement:
+${message}`
+
+    try {
+      if (this.provider === "ollama") {
+        return await this.callOllama(prompt)
+      } else if (this.provider === "openrouter" || this.provider === "mistral") {
+        return await this.callOpenAICompatible([
+          { role: "system", content: this.getSystemPrompt(this.practicalSystemPrompt) },
+          { role: "user", content: prompt },
+        ])
+      } else {
+        const result = await this.geminiModel.generateContent(prompt)
+        return result.response.text()
+      }
+    } catch (error: any) {
+      console.error("[LLMHelper] Error in practical chat:", error)
       throw error
     }
   }

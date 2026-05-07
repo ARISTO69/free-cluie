@@ -15,6 +15,9 @@ export interface LlmSettings {
   ollamaUrl?: string
   ollamaModel?: string
   systemPrompt?: string
+  chatSystemPrompt?: string
+  practicalSystemPrompt?: string
+  systemPromptsEnabled?: boolean
   deepgramApiKey?: string
 }
 

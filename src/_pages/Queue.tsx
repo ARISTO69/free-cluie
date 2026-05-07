@@ -38,6 +38,11 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
   const [chatLoading, setChatLoading] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const chatInputRef = useRef<HTMLInputElement>(null)
+  const [practicalInput, setPracticalInput] = useState("")
+  const [practicalMessages, setPracticalMessages] = useState<{ role: "user" | "gemini"; text: string }[]>([])
+  const [practicalLoading, setPracticalLoading] = useState(false)
+  const [isPracticalOpen, setIsPracticalOpen] = useState(false)
+  const practicalInputRef = useRef<HTMLInputElement>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const audioChunks = useRef<Blob[]>([])
@@ -124,6 +129,23 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
     } finally {
       setChatLoading(false)
       chatInputRef.current?.focus()
+    }
+  }
+
+  const handlePracticalSend = async () => {
+    if (!practicalInput.trim()) return
+    const message = practicalInput
+    setPracticalMessages((msgs) => [...msgs, { role: "user", text: message }])
+    setPracticalLoading(true)
+    setPracticalInput("")
+    try {
+      const response = await window.electronAPI.invoke("practical-chat", message)
+      setPracticalMessages((msgs) => [...msgs, { role: "gemini", text: response }])
+    } catch (err) {
+      setPracticalMessages((msgs) => [...msgs, { role: "gemini", text: "Error: " + String(err) }])
+    } finally {
+      setPracticalLoading(false)
+      practicalInputRef.current?.focus()
     }
   }
 
@@ -260,7 +282,13 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
   }
 
   const handleChatToggle = () => {
-    setIsChatOpen(!isChatOpen)
+    setIsChatOpen((open) => !open)
+    setIsPracticalOpen(false)
+  }
+
+  const handlePracticalToggle = () => {
+    setIsPracticalOpen((open) => !open)
+    setIsChatOpen(false)
   }
 
   const handleSettingsToggle = () => {
@@ -299,6 +327,7 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
           <div className="w-fit">
             <QueueCommands
               onTooltipVisibilityChange={handleTooltipVisibilityChange}
+              onPracticalToggle={handlePracticalToggle}
               onChatToggle={handleChatToggle}
               onSettingsToggle={handleSettingsToggle}
             />
@@ -311,6 +340,79 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
                 uiTheme={uiTheme}
                 onThemeChange={onThemeChange}
               />
+            </div>
+          )}
+
+          {isPracticalOpen && (
+            <div className="mt-4 w-full mx-auto liquid-glass chat-container p-4 flex flex-col select-text">
+              <div className="flex-1 overflow-y-auto mb-3 p-3 rounded-lg bg-white/10 backdrop-blur-md max-h-64 min-h-[120px] glass-content border border-white/20 shadow-lg select-text">
+                {practicalMessages.length === 0 ? (
+                  <div className="text-sm text-gray-600 text-center mt-8">
+                    Practical with {getProviderLabel(currentModel.provider)} {currentModel.model}
+                    <br />
+                    <span className="text-xs text-gray-500">Ask for step-by-step help to complete your experiment</span>
+                    <br />
+                    <span className="text-xs text-gray-500">Previous practical outputs are saved to practical-memory.md</span>
+                  </div>
+                ) : (
+                  practicalMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`w-full flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-3`}
+                    >
+                      <div
+                        className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs shadow-md backdrop-blur-sm border ${
+                          msg.role === "user"
+                            ? "bg-gray-700/80 text-gray-100 ml-12 border-gray-600/40"
+                            : "bg-white/85 text-gray-700 mr-12 border-gray-200/50"
+                        } ai-response-text select-text`}
+                        style={{ lineHeight: "1.4" }}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {practicalLoading && (
+                  <div className="flex justify-start mb-3">
+                    <div className="bg-white/85 text-gray-600 px-3 py-1.5 rounded-xl text-xs backdrop-blur-sm border border-gray-200/50 shadow-md mr-12 select-text">
+                      <span className="inline-flex items-center">
+                        <span className="animate-pulse text-gray-400">.</span>
+                        <span className="animate-pulse animation-delay-200 text-gray-400">.</span>
+                        <span className="animate-pulse animation-delay-400 text-gray-400">.</span>
+                        <span className="ml-2">{currentModel.model} is preparing steps...</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <form
+                className="flex gap-2 items-center glass-content"
+                onSubmit={e => {
+                  e.preventDefault()
+                  handlePracticalSend()
+                }}
+              >
+                <input
+                  ref={practicalInputRef}
+                  className="flex-1 rounded-lg px-3 py-2 bg-white/25 backdrop-blur-md text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400/60 border border-white/40 shadow-lg transition-all duration-200 select-text"
+                  placeholder="Ask for practical exam steps..."
+                  value={practicalInput}
+                  onChange={e => setPracticalInput(e.target.value)}
+                  disabled={practicalLoading}
+                />
+                <button
+                  type="submit"
+                  className="p-2 rounded-lg bg-gray-600/80 hover:bg-gray-700/80 border border-gray-500/60 flex items-center justify-center transition-all duration-200 backdrop-blur-sm shadow-lg disabled:opacity-50"
+                  disabled={practicalLoading || !practicalInput.trim()}
+                  tabIndex={-1}
+                  aria-label="Send practical message"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-7.5-15-7.5v6l10 1.5-10 1.5v6z" />
+                  </svg>
+                </button>
+              </form>
             </div>
           )}
 
@@ -336,8 +438,8 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
                           msg.role === "user"
                             ? "bg-gray-700/80 text-gray-100 ml-12 border-gray-600/40"
                             : "bg-white/85 text-gray-700 mr-12 border-gray-200/50"
-                        } select-text`}
-                        style={{ wordBreak: "break-word", lineHeight: "1.4" }}
+                        } ai-response-text select-text`}
+                        style={{ lineHeight: "1.4" }}
                       >
                         {msg.text}
                       </div>

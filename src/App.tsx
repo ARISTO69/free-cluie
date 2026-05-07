@@ -65,6 +65,9 @@ declare global {
         ollamaUrl?: string
         ollamaModel?: string
         systemPrompt?: string
+        chatSystemPrompt?: string
+        practicalSystemPrompt?: string
+        systemPromptsEnabled?: boolean
         deepgramApiKey?: string
       } | null>
       getAvailableOllamaModels: () => Promise<string[]>
@@ -77,6 +80,7 @@ declare global {
       switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+      saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => Promise<{ success: boolean; error?: string }>
       saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
       getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
       setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>

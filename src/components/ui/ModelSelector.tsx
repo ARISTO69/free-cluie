@@ -20,6 +20,9 @@ interface SavedLlmSettings {
   ollamaUrl?: string;
   ollamaModel?: string;
   systemPrompt?: string;
+  chatSystemPrompt?: string;
+  practicalSystemPrompt?: string;
+  systemPromptsEnabled?: boolean;
   deepgramApiKey?: string;
 }
 
@@ -56,7 +59,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
   const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
   const [mistralModel, setMistralModel] = useState(DEFAULT_MISTRAL_MODEL);
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [chatSystemPrompt, setChatSystemPrompt] = useState("");
+  const [practicalSystemPrompt, setPracticalSystemPrompt] = useState("");
+  const [isSystemPromptEnabled, setIsSystemPromptEnabled] = useState(false);
+  const [activeSystemPrompt, setActiveSystemPrompt] = useState<"chat" | "practical" | null>(null);
   const [systemPromptStatus, setSystemPromptStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [deepgramApiKey, setDeepgramApiKey] = useState("");
   const [deepgramStatus, setDeepgramStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -213,7 +219,11 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       if (saved?.mistralApiKey) {
         setMistralApiKey(saved.mistralApiKey);
       }
-      setSystemPrompt(saved?.systemPrompt || "");
+      const savedChatPrompt = saved?.chatSystemPrompt ?? saved?.systemPrompt ?? "";
+      const savedPracticalPrompt = saved?.practicalSystemPrompt ?? saved?.systemPrompt ?? "";
+      setChatSystemPrompt(savedChatPrompt);
+      setPracticalSystemPrompt(savedPracticalPrompt);
+      setIsSystemPromptEnabled(saved?.systemPromptsEnabled ?? Boolean(savedChatPrompt || savedPracticalPrompt));
       setDeepgramApiKey(saved?.deepgramApiKey || "");
       await loadProviderModels(config.provider, saved);
     } catch (error) {
@@ -285,15 +295,22 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     }
   };
 
-  const handleSystemPromptSave = async () => {
+  const saveSystemPromptSettings = async (enabled: boolean) => {
     try {
       setSystemPromptStatus("saving");
-      const result = await window.electronAPI.saveSystemPrompt(systemPrompt);
+      const result = await window.electronAPI.saveSystemPrompts({
+        chatSystemPrompt,
+        practicalSystemPrompt,
+        enabled
+      });
       if (result.success) {
         setSystemPromptStatus("saved");
         setSavedSettings((settings) => ({
           ...(settings || { provider: selectedProvider }),
-          systemPrompt
+          systemPrompt: chatSystemPrompt,
+          chatSystemPrompt,
+          practicalSystemPrompt,
+          systemPromptsEnabled: enabled
         }));
       } else {
         setSystemPromptStatus("error");
@@ -303,6 +320,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       setSystemPromptStatus("error");
       setErrorMessage(String(error));
     }
+  };
+
+  const handleSystemPromptSave = async () => {
+    await saveSystemPromptSettings(isSystemPromptEnabled);
   };
 
   const handleDeepgramSave = async () => {
@@ -676,36 +697,106 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         </button>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <label className="text-xs font-medium text-gray-700">System Prompt</label>
-          <span className="text-[10px] text-gray-600">
-            {systemPromptStatus === "saving"
-              ? "Saving..."
-              : systemPromptStatus === "saved"
-                ? "Saved"
-                : systemPromptStatus === "error"
-                  ? "Save failed"
-                  : "Optional"}
-          </span>
-        </div>
-        <textarea
-          value={systemPrompt}
-          onChange={(e) => {
-            setSystemPrompt(e.target.value);
-            setSystemPromptStatus("idle");
-          }}
-          placeholder="Example: Answer concisely in bullet points, include assumptions, and avoid long explanations unless asked."
-          className="w-full min-h-[92px] resize-y px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
-        />
+      <div className="space-y-2 rounded border border-white/30 bg-white/20 p-3">
         <button
           type="button"
-          onClick={handleSystemPromptSave}
-          disabled={systemPromptStatus === "saving"}
-          className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white text-xs rounded transition-all shadow-md"
+          onClick={() => {
+            const nextEnabled = !isSystemPromptEnabled;
+            setIsSystemPromptEnabled(nextEnabled);
+            setActiveSystemPrompt(nextEnabled ? activeSystemPrompt || "chat" : null);
+            saveSystemPromptSettings(nextEnabled);
+          }}
+          className="flex w-full items-center justify-between rounded bg-white/40 px-3 py-2 text-xs text-gray-700 transition-all hover:bg-white/60"
+          aria-pressed={isSystemPromptEnabled}
         >
-          {systemPromptStatus === "saving" ? "Saving Prompt..." : "Save System Prompt"}
+          <span className="font-medium">System prompt option</span>
+          <span
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full p-0.5 transition-colors ${
+              isSystemPromptEnabled ? "bg-blue-500" : "bg-gray-400"
+            }`}
+          >
+            <span
+              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                isSystemPromptEnabled ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </span>
         </button>
+
+        {isSystemPromptEnabled && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveSystemPrompt(activeSystemPrompt === "chat" ? null : "chat")}
+                className={`rounded px-3 py-2 text-[11px] transition-all ${
+                  activeSystemPrompt === "chat"
+                    ? "bg-blue-500 text-white shadow-md"
+                    : "bg-white/40 text-gray-700 hover:bg-white/60"
+                }`}
+                aria-expanded={activeSystemPrompt === "chat"}
+              >
+                System Prompt for Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSystemPrompt(activeSystemPrompt === "practical" ? null : "practical")}
+                className={`rounded px-3 py-2 text-[11px] transition-all ${
+                  activeSystemPrompt === "practical"
+                    ? "bg-blue-500 text-white shadow-md"
+                    : "bg-white/40 text-gray-700 hover:bg-white/60"
+                }`}
+                aria-expanded={activeSystemPrompt === "practical"}
+              >
+                System Prompt for Practical
+              </button>
+            </div>
+
+            {activeSystemPrompt && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-medium text-gray-700">
+                    {activeSystemPrompt === "chat" ? "Chat System Prompt" : "Practical System Prompt"}
+                  </label>
+                  <span className="text-[10px] text-gray-600">
+                    {systemPromptStatus === "saving"
+                      ? "Saving..."
+                      : systemPromptStatus === "saved"
+                        ? "Saved"
+                        : systemPromptStatus === "error"
+                          ? "Save failed"
+                          : "Optional"}
+                  </span>
+                </div>
+                <textarea
+                  value={activeSystemPrompt === "chat" ? chatSystemPrompt : practicalSystemPrompt}
+                  onChange={(e) => {
+                    if (activeSystemPrompt === "chat") {
+                      setChatSystemPrompt(e.target.value);
+                    } else {
+                      setPracticalSystemPrompt(e.target.value);
+                    }
+                    setSystemPromptStatus("idle");
+                  }}
+                  placeholder={
+                    activeSystemPrompt === "chat"
+                      ? "Example: Answer concisely, include assumptions, and ask clarifying questions only when required."
+                      : "Example: Guide practical exam work step by step, continue from memory, and focus on the next experiment action."
+                  }
+                  className="w-full min-h-[92px] resize-y px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                />
+                <button
+                  type="button"
+                  onClick={handleSystemPromptSave}
+                  disabled={systemPromptStatus === "saving"}
+                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white text-xs rounded transition-all shadow-md"
+                >
+                  {systemPromptStatus === "saving" ? "Saving Prompts..." : "Save System Prompts"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>

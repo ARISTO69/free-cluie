@@ -21,7 +21,9 @@ export class ProcessingHelper {
     this.appState = appState
 
     const savedSettings = this.appState.getSettingsHelper().getLlmSettings()
-    const savedSystemPrompt = savedSettings?.systemPrompt
+    const savedSystemPrompt = savedSettings?.chatSystemPrompt ?? savedSettings?.systemPrompt
+    const savedPracticalSystemPrompt = savedSettings?.practicalSystemPrompt ?? savedSettings?.systemPrompt
+    const savedSystemPromptsEnabled = savedSettings?.systemPromptsEnabled ?? true
     const useOllama = process.env.USE_OLLAMA === "true"
     const openRouterKey = process.env.OPENROUTER_API_KEY
     const mistralKey = process.env.MISTRAL_API_KEY
@@ -43,7 +45,9 @@ export class ProcessingHelper {
         undefined,
         savedSystemPrompt,
         undefined,
-        deepgramKey
+        deepgramKey,
+        savedPracticalSystemPrompt,
+        savedSystemPromptsEnabled
       )
 
     } else if (openRouterKey) {
@@ -60,7 +64,9 @@ export class ProcessingHelper {
         undefined,
         savedSystemPrompt,
         undefined,
-        deepgramKey
+        deepgramKey,
+        savedPracticalSystemPrompt,
+        savedSystemPromptsEnabled
       )
 
     } else if (mistralKey) {
@@ -77,7 +83,9 @@ export class ProcessingHelper {
         model,
         savedSystemPrompt,
         undefined,
-        deepgramKey
+        deepgramKey,
+        savedPracticalSystemPrompt,
+        savedSystemPromptsEnabled
       )
 
     } else if (geminiKey) {
@@ -94,7 +102,9 @@ export class ProcessingHelper {
         undefined,
         savedSystemPrompt,
         model,
-        deepgramKey
+        deepgramKey,
+        savedPracticalSystemPrompt,
+        savedSystemPromptsEnabled
       )
 
     } else if (savedSettings) {
@@ -123,9 +133,11 @@ export class ProcessingHelper {
         undefined,
         false,
         undefined,
-        settings.systemPrompt,
+        settings.chatSystemPrompt ?? settings.systemPrompt,
         undefined,
-        settings.deepgramApiKey
+        settings.deepgramApiKey,
+        settings.practicalSystemPrompt ?? settings.systemPrompt,
+        settings.systemPromptsEnabled ?? true
       )
     }
 
@@ -142,9 +154,11 @@ export class ProcessingHelper {
         settings.openRouterModel,
         false,
         undefined,
-        settings.systemPrompt,
+        settings.chatSystemPrompt ?? settings.systemPrompt,
         undefined,
-        settings.deepgramApiKey
+        settings.deepgramApiKey,
+        settings.practicalSystemPrompt ?? settings.systemPrompt,
+        settings.systemPromptsEnabled ?? true
       )
     }
 
@@ -161,9 +175,11 @@ export class ProcessingHelper {
         undefined,
         true,
         settings.mistralModel,
-        settings.systemPrompt,
+        settings.chatSystemPrompt ?? settings.systemPrompt,
         undefined,
-        settings.deepgramApiKey
+        settings.deepgramApiKey,
+        settings.practicalSystemPrompt ?? settings.systemPrompt,
+        settings.systemPromptsEnabled ?? true
       )
     }
 
@@ -180,9 +196,11 @@ export class ProcessingHelper {
       undefined,
       false,
       undefined,
-      settings.systemPrompt,
+      settings.chatSystemPrompt ?? settings.systemPrompt,
       settings.geminiModel,
-      settings.deepgramApiKey
+      settings.deepgramApiKey,
+      settings.practicalSystemPrompt ?? settings.systemPrompt,
+      settings.systemPromptsEnabled ?? true
     )
   }
 

@@ -1,12 +1,45 @@
 // ipcHandlers.ts
 
 import { ipcMain, app } from "electron"
+import fs from "fs"
+import path from "path"
 import { AppState } from "./main"
 import { LlmSettings } from "./SettingsHelper"
 
 export function initializeIpcHandlers(appState: AppState): void {
   const saveLlmSettings = (settings: LlmSettings) => {
     appState.getSettingsHelper().saveLlmSettings(settings)
+  }
+  const getChatSystemPrompt = (settings: LlmSettings | null) =>
+    settings?.chatSystemPrompt ?? settings?.systemPrompt ?? ""
+  const getPracticalSystemPrompt = (settings: LlmSettings | null) =>
+    settings?.practicalSystemPrompt ?? settings?.systemPrompt ?? ""
+  const getSystemPromptsEnabled = (settings: LlmSettings | null) =>
+    settings?.systemPromptsEnabled ?? true
+  const practicalMemoryPath = path.join(process.cwd(), "practical-memory.md")
+
+  const readPracticalMemory = async () => {
+    try {
+      return await fs.promises.readFile(practicalMemoryPath, "utf8")
+    } catch (error: any) {
+      if (error.code === "ENOENT") return ""
+      throw error
+    }
+  }
+
+  const appendPracticalMemory = async (message: string, response: string) => {
+    const entry = [
+      `## ${new Date().toISOString()}`,
+      "",
+      "User:",
+      message.trim(),
+      "",
+      "Assistant:",
+      response.trim(),
+      ""
+    ].join("\n")
+
+    await fs.promises.appendFile(practicalMemoryPath, `${entry}\n`, "utf8")
   }
 
   ipcMain.handle(
@@ -104,9 +137,44 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: existing?.ollamaModel,
         ollamaUrl: existing?.ollamaUrl,
         systemPrompt,
+        chatSystemPrompt: systemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt ?? existing?.systemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled ?? true,
         deepgramApiKey: existing?.deepgramApiKey
       })
-      llmHelper.setSystemPrompt(systemPrompt)
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(systemPrompt)
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
+      return { success: true }
+    } catch (error: any) {
+      console.error("Error saving system prompt:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("save-system-prompts", async (_, prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper()
+      const existing = appState.getSettingsHelper().getLlmSettings()
+      saveLlmSettings({
+        provider: existing?.provider || llmHelper.getCurrentProvider(),
+        geminiApiKey: existing?.geminiApiKey,
+        geminiModel: existing?.geminiModel,
+        openRouterApiKey: existing?.openRouterApiKey,
+        openRouterModel: existing?.openRouterModel,
+        mistralApiKey: existing?.mistralApiKey,
+        mistralModel: existing?.mistralModel,
+        ollamaModel: existing?.ollamaModel,
+        ollamaUrl: existing?.ollamaUrl,
+        systemPrompt: prompts.chatSystemPrompt,
+        chatSystemPrompt: prompts.chatSystemPrompt,
+        practicalSystemPrompt: prompts.practicalSystemPrompt,
+        systemPromptsEnabled: prompts.enabled,
+        deepgramApiKey: existing?.deepgramApiKey
+      })
+      llmHelper.setSystemPromptsEnabled(prompts.enabled)
+      llmHelper.setChatSystemPrompt(prompts.chatSystemPrompt)
+      llmHelper.setPracticalSystemPrompt(prompts.practicalSystemPrompt)
       return { success: true }
     } catch (error: any) {
       console.error("Error saving system prompt:", error)
@@ -129,6 +197,9 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: existing?.ollamaModel,
         ollamaUrl: existing?.ollamaUrl,
         systemPrompt: existing?.systemPrompt,
+        chatSystemPrompt: existing?.chatSystemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey
       })
       llmHelper.setDeepgramApiKey(deepgramApiKey)
@@ -192,6 +263,18 @@ export function initializeIpcHandlers(appState: AppState): void {
       throw error;
     }
   });
+
+  ipcMain.handle("practical-chat", async (event, message: string) => {
+    try {
+      const memory = await readPracticalMemory()
+      const result = await appState.processingHelper.getLLMHelper().practicalChat(message, memory)
+      await appendPracticalMemory(message, result)
+      return result
+    } catch (error: any) {
+      console.error("Error in practical-chat handler:", error)
+      throw error
+    }
+  })
 
   ipcMain.handle("quit-app", () => {
     app.quit()
@@ -305,9 +388,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: model || llmHelper.getCurrentModel(),
         ollamaUrl: url || existing?.ollamaUrl || "http://localhost:11434",
         systemPrompt: existing?.systemPrompt,
+        chatSystemPrompt: existing?.chatSystemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey: existing?.deepgramApiKey
       });
-      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Ollama:", error);
@@ -332,9 +420,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: existing?.ollamaModel,
         ollamaUrl: existing?.ollamaUrl,
         systemPrompt: existing?.systemPrompt,
+        chatSystemPrompt: existing?.chatSystemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey: existing?.deepgramApiKey
       });
-      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Gemini:", error);
@@ -360,9 +453,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: existing?.ollamaModel,
         ollamaUrl: existing?.ollamaUrl,
         systemPrompt: existing?.systemPrompt,
+        chatSystemPrompt: existing?.chatSystemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey: existing?.deepgramApiKey
       });
-      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to OpenRouter:", error);
@@ -388,9 +486,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         ollamaModel: existing?.ollamaModel,
         ollamaUrl: existing?.ollamaUrl,
         systemPrompt: existing?.systemPrompt,
+        chatSystemPrompt: existing?.chatSystemPrompt,
+        practicalSystemPrompt: existing?.practicalSystemPrompt,
+        systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey: existing?.deepgramApiKey
       });
-      llmHelper.setSystemPrompt(existing?.systemPrompt || "")
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Mistral:", error);

@@ -40,7 +40,7 @@ export const ContentSection = ({
         </p>
       </div>
     ) : (
-      <div className="text-[13px] leading-[1.4] text-gray-100 max-w-[600px]">
+      <div className="ai-response-text text-[13px] leading-[1.4] text-gray-100 max-w-[600px]">
         {content}
       </div>
     )}

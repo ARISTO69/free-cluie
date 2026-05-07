@@ -27,6 +27,7 @@ export interface ElectronAPI {
   analyzeAudioFromBase64: (data: string, mimeType: string) => Promise<{ text: string; timestamp: number }>
   analyzeAudioFile: (path: string) => Promise<{ text: string; timestamp: number }>
   saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
+  saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => Promise<{ success: boolean; error?: string }>
   saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
   setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>

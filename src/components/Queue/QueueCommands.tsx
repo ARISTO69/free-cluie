@@ -4,6 +4,7 @@ import { Pin, Settings } from "lucide-react"
 
 interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
+  onPracticalToggle: () => void
   onChatToggle: () => void
   onSettingsToggle: () => void
 }
@@ -21,6 +22,7 @@ const shortcuts = [
 
 const QueueCommands: React.FC<QueueCommandsProps> = ({
   onTooltipVisibilityChange,
+  onPracticalToggle,
   onChatToggle,
   onSettingsToggle
 }) => {
@@ -183,6 +185,13 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
+            onClick={onPracticalToggle}
+            type="button"
+          >
+            Practical
+          </button>
           <button
             className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
             onClick={onChatToggle}
