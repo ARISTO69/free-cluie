@@ -61,7 +61,7 @@ export class LLMHelper {
 
   // Gemini
   private geminiModel: any = null
-  private geminiModelName: string = "gemini-2.0-flash"
+  private geminiModelName: string = "gemini-3.1-flash-lite"
 
   // Ollama
   private ollamaModel: string = "llama3.2"
@@ -117,9 +117,7 @@ export class LLMHelper {
 
     } else if (apiKey) {
       this.provider = "gemini"
-      const { GoogleGenerativeAI } = require("@google/generative-ai")
-      const genAI = new GoogleGenerativeAI(apiKey)
-      this.geminiModel = genAI.getGenerativeModel({ model: this.geminiModelName })
+      this.geminiModel = this.createGeminiModel(apiKey)
       console.log(`[LLMHelper] Using Google Gemini with model: ${this.geminiModelName}`)
 
     } else {
@@ -357,6 +355,20 @@ export class LLMHelper {
   private async fileToGeminiPart(imagePath: string) {
     const data = await fs.promises.readFile(imagePath)
     return { inlineData: { data: data.toString("base64"), mimeType: "image/png" } }
+  }
+
+  private createGeminiModel(apiKey: string) {
+    const { GoogleGenAI } = require("@google/genai")
+    const genAI = new GoogleGenAI({ apiKey, apiVersion: "v1beta" })
+    return {
+      generateContent: async (contents: any) => {
+        const response = await genAI.models.generateContent({
+          model: this.geminiModelName,
+          contents,
+        })
+        return { response: { text: () => response.text || "" } }
+      }
+    }
   }
 
   // ─── Core text chat ─────────────────────────────────────────────────────────
@@ -646,9 +658,7 @@ ${message}`
   public async switchToGemini(apiKey?: string, model?: string): Promise<void> {
     if (model) this.geminiModelName = model
     if (apiKey) {
-      const { GoogleGenerativeAI } = require("@google/generative-ai")
-      const genAI = new GoogleGenerativeAI(apiKey)
-      this.geminiModel = genAI.getGenerativeModel({ model: this.geminiModelName })
+      this.geminiModel = this.createGeminiModel(apiKey)
     }
     if (!this.geminiModel) throw new Error("No Gemini API key provided")
     this.provider = "gemini"
