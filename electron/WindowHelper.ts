@@ -224,7 +224,9 @@ export class WindowHelper {
       })
     }
 
-    this.mainWindow.showInactive()
+    this.mainWindow.show()
+    this.mainWindow.focus()
+    this.mainWindow.moveTop()
     this.applyAlwaysOnTop()
 
     this.isWindowVisible = true
@@ -279,6 +281,7 @@ export class WindowHelper {
     this.centerWindow()
     this.mainWindow.show()
     this.mainWindow.focus()
+    this.mainWindow.moveTop()
     this.applyAlwaysOnTop()
     this.isWindowVisible = true
     
