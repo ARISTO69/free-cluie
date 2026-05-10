@@ -1,7 +1,7 @@
 import fs from "fs"
 
 // ─── Provider types ───────────────────────────────────────────────────────────
-type Provider = "gemini" | "ollama" | "openrouter" | "mistral"
+type Provider = "gemini" | "ollama" | "openai" | "openrouter" | "mistral"
 
 export interface ProviderModel {
   id: string
@@ -15,6 +15,14 @@ const DEFAULT_GEMINI_MODELS: ProviderModel[] = [
   { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite" },
   { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
   { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" }
+]
+
+const DEFAULT_OPENAI_MODELS: ProviderModel[] = [
+  { id: "gpt-5-nano", name: "GPT-5 nano" },
+  { id: "gpt-5.4", name: "GPT-5.4" },
+  { id: "gpt-5.4-mini", name: "GPT-5.4 mini" },
+  { id: "gpt-5.3-chat-latest", name: "GPT-5.3 Chat" },
+  { id: "gpt-5.4-nano", name: "GPT-5.4 nano" }
 ]
 
 const DEFAULT_OPENROUTER_MODELS: ProviderModel[] = [
@@ -78,6 +86,8 @@ export class LLMHelper {
     useOllama: boolean = false,
     ollamaModel?: string,
     ollamaUrl?: string,
+    useOpenAI: boolean = false,
+    openAIModel?: string,
     useOpenRouter: boolean = false,
     openRouterModel?: string,
     useMistral: boolean = false,
@@ -100,6 +110,13 @@ export class LLMHelper {
       this.ollamaModel = ollamaModel || "llama3.2"
       console.log(`[LLMHelper] Using Ollama with model: ${this.ollamaModel}`)
       this.initializeOllamaModel()
+
+    } else if (useOpenAI && apiKey) {
+      this.provider = "openai"
+      this.openaiApiKey = apiKey
+      this.openaiModel = openAIModel || "gpt-5-nano"
+      this.openaiBaseUrl = "https://api.openai.com/v1"
+      console.log(`[LLMHelper] Using OpenAI with model: ${this.openaiModel}`)
 
     } else if (useOpenRouter && apiKey) {
       this.provider = "openrouter"
@@ -188,8 +205,9 @@ export class LLMHelper {
       body: JSON.stringify({
         model: this.openaiModel,
         messages,
-        temperature: 0.7,
-        max_tokens: 4096,
+        ...(this.provider === "openai"
+          ? { max_completion_tokens: 4096, temperature: 1 }
+          : { max_tokens: 4096, temperature: 0.7 }),
       }),
     })
 
@@ -261,11 +279,37 @@ export class LLMHelper {
       return this.getGeminiModels(options.apiKey)
     }
 
+    if (provider === "openai") {
+      return this.getOpenAIModels(options.apiKey)
+    }
+
     if (provider === "mistral") {
       return this.getMistralModels(options.apiKey)
     }
 
     return this.getOpenRouterModels()
+  }
+
+  private async getOpenAIModels(apiKey?: string): Promise<ProviderModel[]> {
+    if (!apiKey) return DEFAULT_OPENAI_MODELS
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      })
+      if (!response.ok) throw new Error(`OpenAI models API error ${response.status}`)
+      const data = await response.json()
+      const models = (data.data || [])
+        .map((model: any) => ({
+          id: String(model.id || ""),
+          name: model.id
+        }))
+        .filter((model: ProviderModel) => model.id)
+      return models.length > 0 ? models : DEFAULT_OPENAI_MODELS
+    } catch (error) {
+      console.error("[LLMHelper] Error fetching OpenAI models:", error)
+      return DEFAULT_OPENAI_MODELS
+    }
   }
 
   private async getGeminiModels(apiKey?: string): Promise<ProviderModel[]> {
@@ -381,7 +425,7 @@ export class LLMHelper {
     try {
       if (this.provider === "ollama") {
         return await this.callOllama(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
-      } else if (this.provider === "openrouter" || this.provider === "mistral") {
+      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         return await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: message },
@@ -410,7 +454,7 @@ ${message}`
     try {
       if (this.provider === "ollama") {
         return await this.callOllama(prompt)
-      } else if (this.provider === "openrouter" || this.provider === "mistral") {
+      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         return await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt(this.practicalSystemPrompt) },
           { role: "user", content: prompt },
@@ -431,7 +475,7 @@ ${message}`
     const jsonPrompt = `${this.getSystemPrompt()}\n\nAnalyze these images and extract the following information in JSON format:\n{\n  "problem_statement": "A clear statement of the problem or situation.",\n  "context": "Relevant background or context from the images.",\n  "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n  "reasoning": "Explanation of why these suggestions are appropriate."\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
 
     try {
-      if (this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         const contentParts: OpenAIContentPart[] = [{ type: "text", text: jsonPrompt }]
         for (const p of imagePaths) {
           contentParts.push({ type: "image_url", image_url: { url: await this.imagePathToBase64DataUrl(p) } })
@@ -466,7 +510,7 @@ ${message}`
     console.log(`[LLMHelper] Calling ${this.provider} for solution...`)
     try {
       let text: string
-      if (this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         text = await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: prompt },
@@ -492,7 +536,7 @@ ${message}`
     const prompt = `${this.getSystemPrompt()}\n\nGiven:\n1. Original problem: ${JSON.stringify(problemInfo, null, 2)}\n2. Current response: ${currentCode}\n3. Debug images provided\n\nAnalyze and provide feedback in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer", "Second possible answer", "..."],\n    "reasoning": "Explanation of suggestions."\n  }\n}\nReturn ONLY the JSON object.`
 
     try {
-      if (this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         const contentParts: OpenAIContentPart[] = [{ type: "text", text: prompt }]
         for (const p of debugImagePaths) {
           contentParts.push({ type: "image_url", image_url: { url: await this.imagePathToBase64DataUrl(p) } })
@@ -525,7 +569,7 @@ ${message}`
 
     try {
       let text: string
-      if (this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         const dataUrl = await this.imagePathToBase64DataUrl(imagePath)
         text = await this.callOpenAICompatible([{
           role: "user",
@@ -553,9 +597,9 @@ ${message}`
   // ─── Audio (Gemini only — OpenRouter/Mistral not supported) ──────────────────
 
   public async analyzeAudioFile(audioPath: string) {
-    if (this.provider === "openrouter" || this.provider === "mistral") {
+    if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
       return {
-        text: "Audio analysis is not supported with OpenRouter/Mistral. Please take a screenshot instead and use Ctrl+H.",
+        text: "Audio analysis is not supported with OpenAI/OpenRouter/Mistral. Please take a screenshot instead and use Ctrl+H.",
         timestamp: Date.now(),
       }
     }
@@ -639,7 +683,7 @@ ${message}`
 
   public getCurrentModel(): string {
     if (this.provider === "ollama") return this.ollamaModel
-    if (this.provider === "openrouter" || this.provider === "mistral") return this.openaiModel
+    if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") return this.openaiModel
     return this.geminiModelName
   }
 
@@ -673,6 +717,14 @@ ${message}`
     console.log(`[LLMHelper] Switched to OpenRouter: ${this.openaiModel}`)
   }
 
+  public async switchToOpenAI(apiKey: string, model?: string): Promise<void> {
+    this.provider = "openai"
+    this.openaiApiKey = apiKey
+    this.openaiModel = model || "gpt-5-nano"
+    this.openaiBaseUrl = "https://api.openai.com/v1"
+    console.log(`[LLMHelper] Switched to OpenAI: ${this.openaiModel}`)
+  }
+
   public async switchToMistral(apiKey: string, model?: string): Promise<void> {
     this.provider = "mistral"
     this.openaiApiKey = apiKey
@@ -687,7 +739,7 @@ ${message}`
         const available = await this.checkOllamaAvailable()
         if (!available) return { success: false, error: `Ollama not available at ${this.ollamaUrl}` }
         await this.callOllama("Hello")
-      } else if (this.provider === "openrouter" || this.provider === "mistral") {
+      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
         await this.callOpenAICompatible([{ role: "user", content: "Hello" }])
       } else {
         const result = await this.geminiModel.generateContent("Hello")

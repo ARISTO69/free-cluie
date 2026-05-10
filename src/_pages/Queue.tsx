@@ -13,7 +13,7 @@ import ModelSelector from "../components/ui/ModelSelector"
 import { UITheme } from "../types/theme"
 import { Mic } from "lucide-react"
 
-type Provider = "ollama" | "gemini" | "openrouter" | "mistral"
+type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
 
 interface QueueProps {
   setView: React.Dispatch<React.SetStateAction<"queue" | "solutions" | "debug">>
@@ -88,6 +88,8 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
     switch (provider) {
       case "ollama":
         return "Ollama"
+      case "openai":
+        return "OpenAI"
       case "openrouter":
         return "OpenRouter"
       case "mistral":
@@ -330,6 +332,8 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
               onPracticalToggle={handlePracticalToggle}
               onChatToggle={handleChatToggle}
               onSettingsToggle={handleSettingsToggle}
+              uiTheme={uiTheme}
+              onThemeChange={onThemeChange}
             />
           </div>
           {isSettingsOpen && (

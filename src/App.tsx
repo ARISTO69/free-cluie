@@ -53,11 +53,13 @@ declare global {
       quitApp: () => Promise<void>
       
       // LLM Model Management
-      getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openrouter" | "mistral"; model: string; isOllama: boolean }>
+      getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"; model: string; isOllama: boolean }>
       getSavedLlmSettings: () => Promise<{
-        provider: "ollama" | "gemini" | "openrouter" | "mistral"
+        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
         geminiApiKey?: string
         geminiModel?: string
+        openAiApiKey?: string
+        openAiModel?: string
         openRouterApiKey?: string
         openRouterModel?: string
         mistralApiKey?: string
@@ -72,11 +74,12 @@ declare global {
       } | null>
       getAvailableOllamaModels: () => Promise<string[]>
       getAvailableProviderModels: (
-        provider: "ollama" | "gemini" | "openrouter" | "mistral",
+        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
         options?: { apiKey?: string; ollamaUrl?: string }
       ) => Promise<Array<{ id: string; name?: string }>>
       switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
       switchToGemini: (apiKey?: string, model?: string) => Promise<{ success: boolean; error?: string }>
+      switchToOpenAI: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>

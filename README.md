@@ -12,6 +12,7 @@ If you’re looking for a hosted desktop recording API, consider checking out [R
 - Make sure you have Node.js installed on your computer
 - Git installed on your computer  
 - **Either** a Gemini API key (get it from [Google AI Studio](https://makersuite.google.com/app/apikey))
+- **Or** an OpenAI API key
 - **Or** Ollama installed locally for private LLM usage (recommended for privacy)
 
 ### Installation Steps
@@ -38,6 +39,12 @@ npm install
    **For Gemini (Cloud AI):**
    ```env
    GEMINI_API_KEY=your_api_key_here
+   ```
+
+   **For OpenAI:**
+   ```env
+   OPENAI_API_KEY=your_api_key_here
+   OPENAI_MODEL=gpt-5-nano
    ```
    
    **For Ollama (Local/Private AI):**
@@ -231,6 +238,7 @@ If you see other errors:
 
 ### **AI Models Supported**
 - **Gemini 2.0 Flash** - Latest Google AI with vision capabilities
+- **OpenAI GPT-5.5** - Native OpenAI API with vision-capable chat models
 - **Llama 3.2** - Meta's advanced local model via Ollama
 - **CodeLlama** - Specialized coding assistance
 - **Mistral** - Lightweight, fast responses

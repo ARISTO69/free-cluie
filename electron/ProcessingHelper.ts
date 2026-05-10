@@ -25,6 +25,7 @@ export class ProcessingHelper {
     const savedPracticalSystemPrompt = savedSettings?.practicalSystemPrompt ?? savedSettings?.systemPrompt
     const savedSystemPromptsEnabled = savedSettings?.systemPromptsEnabled ?? true
     const useOllama = process.env.USE_OLLAMA === "true"
+    const openAIKey = process.env.OPENAI_API_KEY
     const openRouterKey = process.env.OPENROUTER_API_KEY
     const mistralKey = process.env.MISTRAL_API_KEY
     const geminiKey = process.env.GEMINI_API_KEY
@@ -39,6 +40,29 @@ export class ProcessingHelper {
         true,
         ollamaModel,
         ollamaUrl,
+        false,
+        undefined,
+        false,
+        undefined,
+        false,
+        undefined,
+        savedSystemPrompt,
+        undefined,
+        deepgramKey,
+        savedPracticalSystemPrompt,
+        savedSystemPromptsEnabled
+      )
+
+    } else if (openAIKey) {
+      const model = process.env.OPENAI_MODEL || "gpt-5-nano"
+      console.log(`[ProcessingHelper] Initializing with OpenAI (${model})`)
+      this.llmHelper = new LLMHelper(
+        openAIKey,
+        false,
+        undefined,
+        undefined,
+        true,
+        model,
         false,
         undefined,
         false,
@@ -58,6 +82,8 @@ export class ProcessingHelper {
         false,
         undefined,
         undefined,
+        false,
+        undefined,
         true,
         model,
         false,
@@ -76,6 +102,8 @@ export class ProcessingHelper {
         mistralKey,
         false,
         undefined,
+        undefined,
+        false,
         undefined,
         false,
         undefined,
@@ -100,6 +128,8 @@ export class ProcessingHelper {
         undefined,
         false,
         undefined,
+        false,
+        undefined,
         savedSystemPrompt,
         model,
         deepgramKey,
@@ -114,6 +144,7 @@ export class ProcessingHelper {
     } else {
       throw new Error(
         "No AI provider configured. Add one of these to your .env:\n" +
+        "  OPENAI_API_KEY=...\n" +
         "  OPENROUTER_API_KEY=...\n" +
         "  MISTRAL_API_KEY=...\n" +
         "  GEMINI_API_KEY=...\n" +
@@ -129,6 +160,31 @@ export class ProcessingHelper {
         true,
         settings.ollamaModel,
         settings.ollamaUrl,
+        false,
+        undefined,
+        false,
+        undefined,
+        false,
+        undefined,
+        settings.chatSystemPrompt ?? settings.systemPrompt,
+        undefined,
+        settings.deepgramApiKey,
+        settings.practicalSystemPrompt ?? settings.systemPrompt,
+        settings.systemPromptsEnabled ?? true
+      )
+    }
+
+    if (settings.provider === "openai") {
+      if (!settings.openAiApiKey) {
+        throw new Error("Saved OpenAI settings are missing the API key")
+      }
+      return new LLMHelper(
+        settings.openAiApiKey,
+        false,
+        undefined,
+        undefined,
+        true,
+        settings.openAiModel,
         false,
         undefined,
         false,
@@ -149,6 +205,8 @@ export class ProcessingHelper {
         settings.openRouterApiKey,
         false,
         undefined,
+        undefined,
+        false,
         undefined,
         true,
         settings.openRouterModel,
@@ -173,6 +231,8 @@ export class ProcessingHelper {
         undefined,
         false,
         undefined,
+        false,
+        undefined,
         true,
         settings.mistralModel,
         settings.chatSystemPrompt ?? settings.systemPrompt,
@@ -191,6 +251,8 @@ export class ProcessingHelper {
       settings.geminiApiKey,
       false,
       undefined,
+      undefined,
+      false,
       undefined,
       false,
       undefined,

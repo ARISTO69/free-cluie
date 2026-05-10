@@ -32,9 +32,10 @@ export interface ElectronAPI {
   getWindowSettings: () => Promise<{ alwaysOnTop: boolean }>
   setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<{ success: boolean; error?: string }>
   getAvailableProviderModels: (
-    provider: "ollama" | "gemini" | "openrouter" | "mistral",
+    provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
     options?: { apiKey?: string; ollamaUrl?: string }
   ) => Promise<Array<{ id: string; name?: string }>>
+  switchToOpenAI: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   quitApp: () => Promise<void>
   invoke: (channel: string, ...args: any[]) => Promise<any>
 }

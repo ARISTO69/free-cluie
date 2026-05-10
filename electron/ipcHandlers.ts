@@ -10,6 +10,28 @@ export function initializeIpcHandlers(appState: AppState): void {
   const saveLlmSettings = (settings: LlmSettings) => {
     appState.getSettingsHelper().saveLlmSettings(settings)
   }
+  const buildLlmSettings = (
+    existing: LlmSettings | null,
+    currentProvider: LlmSettings["provider"],
+    overrides: Partial<LlmSettings>
+  ): LlmSettings => ({
+    provider: overrides.provider ?? existing?.provider ?? currentProvider,
+    geminiApiKey: overrides.geminiApiKey ?? existing?.geminiApiKey,
+    geminiModel: overrides.geminiModel ?? existing?.geminiModel,
+    openAiApiKey: overrides.openAiApiKey ?? existing?.openAiApiKey,
+    openAiModel: overrides.openAiModel ?? existing?.openAiModel,
+    openRouterApiKey: overrides.openRouterApiKey ?? existing?.openRouterApiKey,
+    openRouterModel: overrides.openRouterModel ?? existing?.openRouterModel,
+    mistralApiKey: overrides.mistralApiKey ?? existing?.mistralApiKey,
+    mistralModel: overrides.mistralModel ?? existing?.mistralModel,
+    ollamaModel: overrides.ollamaModel ?? existing?.ollamaModel,
+    ollamaUrl: overrides.ollamaUrl ?? existing?.ollamaUrl,
+    systemPrompt: overrides.systemPrompt ?? existing?.systemPrompt,
+    chatSystemPrompt: overrides.chatSystemPrompt ?? existing?.chatSystemPrompt,
+    practicalSystemPrompt: overrides.practicalSystemPrompt ?? existing?.practicalSystemPrompt,
+    systemPromptsEnabled: overrides.systemPromptsEnabled ?? existing?.systemPromptsEnabled,
+    deepgramApiKey: overrides.deepgramApiKey ?? existing?.deepgramApiKey
+  })
   const getChatSystemPrompt = (settings: LlmSettings | null) =>
     settings?.chatSystemPrompt ?? settings?.systemPrompt ?? ""
   const getPracticalSystemPrompt = (settings: LlmSettings | null) =>
@@ -126,22 +148,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper()
       const existing = appState.getSettingsHelper().getLlmSettings()
-      saveLlmSettings({
-        provider: existing?.provider || llmHelper.getCurrentProvider(),
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         systemPrompt,
         chatSystemPrompt: systemPrompt,
         practicalSystemPrompt: existing?.practicalSystemPrompt ?? existing?.systemPrompt,
         systemPromptsEnabled: existing?.systemPromptsEnabled ?? true,
         deepgramApiKey: existing?.deepgramApiKey
-      })
+      }))
       llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
       llmHelper.setChatSystemPrompt(systemPrompt)
       llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
@@ -156,22 +169,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper()
       const existing = appState.getSettingsHelper().getLlmSettings()
-      saveLlmSettings({
-        provider: existing?.provider || llmHelper.getCurrentProvider(),
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         systemPrompt: prompts.chatSystemPrompt,
         chatSystemPrompt: prompts.chatSystemPrompt,
         practicalSystemPrompt: prompts.practicalSystemPrompt,
         systemPromptsEnabled: prompts.enabled,
         deepgramApiKey: existing?.deepgramApiKey
-      })
+      }))
       llmHelper.setSystemPromptsEnabled(prompts.enabled)
       llmHelper.setChatSystemPrompt(prompts.chatSystemPrompt)
       llmHelper.setPracticalSystemPrompt(prompts.practicalSystemPrompt)
@@ -186,22 +190,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper()
       const existing = appState.getSettingsHelper().getLlmSettings()
-      saveLlmSettings({
-        provider: existing?.provider || llmHelper.getCurrentProvider(),
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         systemPrompt: existing?.systemPrompt,
         chatSystemPrompt: existing?.chatSystemPrompt,
         practicalSystemPrompt: existing?.practicalSystemPrompt,
         systemPromptsEnabled: existing?.systemPromptsEnabled,
         deepgramApiKey
-      })
+      }))
       llmHelper.setDeepgramApiKey(deepgramApiKey)
       return { success: true }
     } catch (error: any) {
@@ -359,7 +354,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     "get-available-provider-models",
     async (
       _,
-      provider: "ollama" | "gemini" | "openrouter" | "mistral",
+      provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
       options?: { apiKey?: string; ollamaUrl?: string }
     ) => {
       try {
@@ -377,22 +372,11 @@ export function initializeIpcHandlers(appState: AppState): void {
       const llmHelper = appState.processingHelper.getLLMHelper();
       await llmHelper.switchToOllama(model, url);
       const existing = appState.getSettingsHelper().getLlmSettings();
-      saveLlmSettings({
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         provider: "ollama",
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
         ollamaModel: model || llmHelper.getCurrentModel(),
         ollamaUrl: url || existing?.ollamaUrl || "http://localhost:11434",
-        systemPrompt: existing?.systemPrompt,
-        chatSystemPrompt: existing?.chatSystemPrompt,
-        practicalSystemPrompt: existing?.practicalSystemPrompt,
-        systemPromptsEnabled: existing?.systemPromptsEnabled,
-        deepgramApiKey: existing?.deepgramApiKey
-      });
+      }));
       llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
       llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
       llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
@@ -409,28 +393,39 @@ export function initializeIpcHandlers(appState: AppState): void {
       const existing = appState.getSettingsHelper().getLlmSettings();
       const geminiApiKey = apiKey || existing?.geminiApiKey;
       await llmHelper.switchToGemini(geminiApiKey, model || existing?.geminiModel);
-      saveLlmSettings({
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         provider: "gemini",
         geminiApiKey,
         geminiModel: model || existing?.geminiModel || llmHelper.getCurrentModel(),
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
-        systemPrompt: existing?.systemPrompt,
-        chatSystemPrompt: existing?.chatSystemPrompt,
-        practicalSystemPrompt: existing?.practicalSystemPrompt,
-        systemPromptsEnabled: existing?.systemPromptsEnabled,
-        deepgramApiKey: existing?.deepgramApiKey
-      });
+      }));
       llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
       llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
       llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to Gemini:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("switch-to-openai", async (_, apiKey: string, model?: string) => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      const existing = appState.getSettingsHelper().getLlmSettings();
+      const openAiApiKey = apiKey || existing?.openAiApiKey;
+      const openAiModel = model || existing?.openAiModel;
+      await llmHelper.switchToOpenAI(openAiApiKey, openAiModel);
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
+        provider: "openai",
+        openAiApiKey,
+        openAiModel: openAiModel || llmHelper.getCurrentModel(),
+      }));
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error switching to OpenAI:", error);
       return { success: false, error: error.message };
     }
   });
@@ -442,22 +437,11 @@ export function initializeIpcHandlers(appState: AppState): void {
       const openRouterApiKey = apiKey || existing?.openRouterApiKey;
       const openRouterModel = model || existing?.openRouterModel;
       await llmHelper.switchToOpenRouter(openRouterApiKey, openRouterModel);
-      saveLlmSettings({
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         provider: "openrouter",
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
         openRouterApiKey,
         openRouterModel: openRouterModel || llmHelper.getCurrentModel(),
-        mistralApiKey: existing?.mistralApiKey,
-        mistralModel: existing?.mistralModel,
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
-        systemPrompt: existing?.systemPrompt,
-        chatSystemPrompt: existing?.chatSystemPrompt,
-        practicalSystemPrompt: existing?.practicalSystemPrompt,
-        systemPromptsEnabled: existing?.systemPromptsEnabled,
-        deepgramApiKey: existing?.deepgramApiKey
-      });
+      }));
       llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
       llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
       llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
@@ -475,22 +459,11 @@ export function initializeIpcHandlers(appState: AppState): void {
       const mistralApiKey = apiKey || existing?.mistralApiKey;
       const mistralModel = model || existing?.mistralModel;
       await llmHelper.switchToMistral(mistralApiKey, mistralModel);
-      saveLlmSettings({
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
         provider: "mistral",
-        geminiApiKey: existing?.geminiApiKey,
-        geminiModel: existing?.geminiModel,
-        openRouterApiKey: existing?.openRouterApiKey,
-        openRouterModel: existing?.openRouterModel,
         mistralApiKey,
         mistralModel: mistralModel || llmHelper.getCurrentModel(),
-        ollamaModel: existing?.ollamaModel,
-        ollamaUrl: existing?.ollamaUrl,
-        systemPrompt: existing?.systemPrompt,
-        chatSystemPrompt: existing?.chatSystemPrompt,
-        practicalSystemPrompt: existing?.practicalSystemPrompt,
-        systemPromptsEnabled: existing?.systemPromptsEnabled,
-        deepgramApiKey: existing?.deepgramApiKey
-      });
+      }));
       llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
       llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
       llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))

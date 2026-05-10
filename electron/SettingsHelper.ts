@@ -2,12 +2,14 @@ import { app } from "electron"
 import fs from "fs"
 import path from "node:path"
 
-export type Provider = "ollama" | "gemini" | "openrouter" | "mistral"
+export type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
 
 export interface LlmSettings {
   provider: Provider
   geminiApiKey?: string
   geminiModel?: string
+  openAiApiKey?: string
+  openAiModel?: string
   openRouterApiKey?: string
   openRouterModel?: string
   mistralApiKey?: string

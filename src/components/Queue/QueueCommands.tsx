@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from "react"
 import { IoLogOutOutline } from "react-icons/io5"
 import { Pin, Settings } from "lucide-react"
+import { UITheme } from "../../types/theme"
 
 interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
   onPracticalToggle: () => void
   onChatToggle: () => void
   onSettingsToggle: () => void
+  uiTheme: UITheme
+  onThemeChange: (theme: UITheme) => void
 }
 
 const shortcuts = [
@@ -24,7 +27,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   onTooltipVisibilityChange,
   onPracticalToggle,
   onChatToggle,
-  onSettingsToggle
+  onSettingsToggle,
+  uiTheme,
+  onThemeChange
 }) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -203,6 +208,19 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
         <div className="flex items-center gap-2">
           <button
+            className={`rounded-md px-2 py-1 text-[11px] leading-none transition-colors ${
+              uiTheme === "translucent"
+                ? "bg-black text-white hover:bg-black/85"
+                : "bg-white/10 text-white/70 hover:bg-white/20"
+            }`}
+            onClick={() => onThemeChange(uiTheme === "dark" ? "translucent" : "dark")}
+            type="button"
+            title="Change appearance mode"
+            aria-label="Change appearance mode"
+          >
+            Mode
+          </button>
+          <button
             className="bg-white/10 hover:bg-white/20 transition-colors rounded-md p-1.5 text-white/70 flex items-center justify-center"
             onClick={onSettingsToggle}
             type="button"
@@ -212,8 +230,14 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             <Settings className="w-3.5 h-3.5" />
           </button>
           <button
-            className={`bg-white/10 hover:bg-white/20 transition-colors rounded-md p-1.5 text-white/70 flex items-center justify-center border ${
-              alwaysOnTop ? "border-white/70 bg-white/20 text-white" : "border-transparent"
+            className={`transition-colors rounded-md p-1.5 flex items-center justify-center border ${
+              uiTheme === "dark"
+                ? alwaysOnTop
+                  ? "bg-blue-500/80 hover:bg-blue-500/90 border-blue-400/70 text-white"
+                  : "bg-white/10 hover:bg-white/20 border-transparent text-white/70"
+                : alwaysOnTop
+                  ? "bg-white/20 hover:bg-white/25 border-white/70 text-white"
+                  : "bg-white/10 hover:bg-white/20 border-transparent text-white/70"
             }`}
             onClick={handlePinToggle}
             type="button"

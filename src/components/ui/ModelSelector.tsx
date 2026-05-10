@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { UITheme } from "../../types/theme";
 
-type Provider = "ollama" | "gemini" | "openrouter" | "mistral";
+type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral";
 
 interface ModelConfig {
   provider: Provider;
@@ -13,6 +13,8 @@ interface SavedLlmSettings {
   provider: Provider;
   geminiApiKey?: string;
   geminiModel?: string;
+  openAiApiKey?: string;
+  openAiModel?: string;
   openRouterApiKey?: string;
   openRouterModel?: string;
   mistralApiKey?: string;
@@ -39,6 +41,7 @@ interface ModelSelectorProps {
 }
 
 const DEFAULT_OPENROUTER_MODEL = "mistralai/mistral-large";
+const DEFAULT_OPENAI_MODEL = "gpt-5-nano";
 const DEFAULT_MISTRAL_MODEL = "mistral-large-latest";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 
@@ -52,11 +55,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
 
   const [selectedProvider, setSelectedProvider] = useState<Provider>("gemini");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [openAiApiKey, setOpenAiApiKey] = useState("");
   const [openRouterApiKey, setOpenRouterApiKey] = useState("");
   const [mistralApiKey, setMistralApiKey] = useState("");
   const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
   const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [openAiModel, setOpenAiModel] = useState(DEFAULT_OPENAI_MODEL);
   const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
   const [mistralModel, setMistralModel] = useState(DEFAULT_MISTRAL_MODEL);
   const [chatSystemPrompt, setChatSystemPrompt] = useState("");
@@ -91,6 +96,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     switch (provider) {
       case "ollama":
         return "Ollama";
+      case "openai":
+        return "OpenAI";
       case "openrouter":
         return "OpenRouter";
       case "mistral":
@@ -104,6 +111,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     switch (provider) {
       case "ollama":
         return selectedOllamaModel;
+      case "openai":
+        return openAiModel;
       case "openrouter":
         return openRouterModel;
       case "mistral":
@@ -115,6 +124,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
 
   const getApiKeyForProvider = (provider: Provider, saved?: SavedLlmSettings | null) => {
     if (provider === "gemini") return geminiApiKey || saved?.geminiApiKey;
+    if (provider === "openai") return openAiApiKey || saved?.openAiApiKey;
     if (provider === "openrouter") return openRouterApiKey || saved?.openRouterApiKey;
     if (provider === "mistral") return mistralApiKey || saved?.mistralApiKey;
     return undefined;
@@ -126,6 +136,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
 
     if (provider === "gemini" && !ids.includes(geminiModel)) {
       setGeminiModel(ids.includes(DEFAULT_GEMINI_MODEL) ? DEFAULT_GEMINI_MODEL : ids[0]);
+    }
+    if (provider === "openai" && !ids.includes(openAiModel)) {
+      setOpenAiModel(ids.includes(DEFAULT_OPENAI_MODEL) ? DEFAULT_OPENAI_MODEL : ids[0]);
     }
     if (provider === "openrouter" && !ids.includes(openRouterModel)) {
       setOpenRouterModel(ids.includes(DEFAULT_OPENROUTER_MODEL) ? DEFAULT_OPENROUTER_MODEL : ids[0]);
@@ -171,6 +184,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
   const setModelForProvider = (provider: Provider, model: string) => {
     if (provider === "gemini") setGeminiModel(model);
     if (provider === "ollama") setSelectedOllamaModel(model);
+    if (provider === "openai") setOpenAiModel(model);
     if (provider === "openrouter") setOpenRouterModel(model);
     if (provider === "mistral") setMistralModel(model);
     setModelSearch("");
@@ -193,6 +207,14 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         setGeminiModel(config.model);
       } else if (saved?.geminiModel) {
         setGeminiModel(saved.geminiModel);
+      }
+      if (saved?.openAiApiKey) {
+        setOpenAiApiKey(saved.openAiApiKey);
+      }
+      if (config.provider === "openai") {
+        setOpenAiModel(config.model);
+      } else if (saved?.openAiModel) {
+        setOpenAiModel(saved.openAiModel);
       }
       if (config.provider === "ollama") {
         setSelectedOllamaModel(config.model);
@@ -270,6 +292,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       let result;
       if (selectedProvider === "ollama") {
         result = await window.electronAPI.switchToOllama(selectedOllamaModel, ollamaUrl);
+      } else if (selectedProvider === "openai") {
+        result = await window.electronAPI.switchToOpenAI(openAiApiKey || savedSettings?.openAiApiKey || "", openAiModel);
       } else if (selectedProvider === "openrouter") {
         result = await window.electronAPI.switchToOpenRouter(openRouterApiKey || savedSettings?.openRouterApiKey || "", openRouterModel);
       } else if (selectedProvider === "mistral") {
@@ -520,6 +544,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
           className="w-40 px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-blue-400/60"
         >
           <option value="gemini">Gemini</option>
+          <option value="openai">OpenAI</option>
           <option value="ollama">Ollama</option>
           <option value="openrouter">OpenRouter</option>
           <option value="mistral">Mistral</option>
@@ -543,6 +568,34 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
               <label className="text-xs font-medium text-gray-700">Model</label>
               <button
                 onClick={() => loadProviderModels("gemini", savedSettings)}
+                className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
+                title="Refresh models"
+              >
+                {isLoadingModels ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+            {renderModelPicker()}
+          </div>
+        </div>
+      )}
+
+      {selectedProvider === "openai" && (
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs font-medium text-gray-700">OpenAI API Key</label>
+            <input
+              type="password"
+              placeholder="Enter OpenAI API key..."
+              value={openAiApiKey}
+              onChange={(e) => setOpenAiApiKey(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-sky-400/60"
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Model</label>
+              <button
+                onClick={() => loadProviderModels("openai", savedSettings)}
                 className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
                 title="Refresh models"
               >
