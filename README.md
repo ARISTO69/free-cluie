@@ -101,7 +101,7 @@ npm run app:dev
 ### Install
 
 ```bash
-git clone [repository-url]
+git clone https://github.com/ARISTO69/free-cluie.git
 cd free-cluie
 ```
 
