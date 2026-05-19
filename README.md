@@ -22,39 +22,99 @@ If you want help integrating AI into your business, visit [www.envoyc.com](https
 
 ### Prerequisites
 
-- Node.js installed
+- Node.js 24.0.0 installed
 - Git installed
 - One of the supported AI options:
   - Gemini API key
   - OpenAI API key
+  - OpenRouter API key
+  - Mistral API key
   - Ollama for local/private usage
+
+### Windows Setup
+
+1. Check your Node.js version.
+
+```bash
+node -v
+```
+
+If the version is anything other than `v24.0.0` or another `24.x` release, run `#1 Install NodeJS 24.0.0.bat`.
+
+2. Run `#2 Create env and Install.bat`.
+
+3. Run `#3 Add your API keys.bat` and enter your keys one by one.
+
+Press `Enter` for any API you do not have.
+
+4. Run `#4 Run Command.bat`.
+
+### Mac/Linux Setup
+
+1. Check your Node.js version.
+
+```bash
+node -v
+```
+
+If you have Node.js `22.x`, `26.x`, or any version other than `24.x`, remove the current install and install Node.js 24.0.0.
+
+If you use `nvm`:
+
+```bash
+nvm uninstall <current-version>
+nvm install 24.0.0
+nvm use 24.0.0
+```
+
+If you use Homebrew on macOS:
+
+```bash
+brew uninstall node
+brew install node@24
+brew link --force --overwrite node@24
+```
+
+2. Create a `.env` file in the project root and paste this:
+
+```env
+MISTRAL_API_KEY=""
+OPENROUTER_API_KEY=""
+GEMINI_API_KEY=""
+OPENAI_API_KEY=""
+```
+
+Add your API keys between the quotes, then save the file.
+
+3. Open a terminal in the project folder and run:
+
+```bash
+npm install
+```
+
+4. Start the app:
+
+```bash
+npm run app:dev
+```
 
 ### Install
 
 ```bash
 git clone [repository-url]
 cd free-cluie
-npm install
 ```
 
 ### Environment Variables
 
-Create a `.env` file in the project root.
-
-#### Gemini
-
 ```env
+MISTRAL_API_KEY=your_api_key_here
+OPENROUTER_API_KEY=your_api_key_here
 GEMINI_API_KEY=your_api_key_here
-```
-
-#### OpenAI
-
-```env
 OPENAI_API_KEY=your_api_key_here
-OPENAI_MODEL=gpt-5-nano
 ```
 
-#### Ollama
+Optional Ollama configuration:
 
 ```env
 USE_OLLAMA=true
@@ -65,7 +125,7 @@ OLLAMA_URL=http://localhost:11434
 ### Run
 
 ```bash
-npm start
+npm run app:dev
 ```
 
 For a production build:
@@ -90,6 +150,16 @@ npm run dist
 - Local inference
 - No API usage cost
 - Better privacy control
+
+### OpenRouter
+
+- OpenAI-compatible API access
+- Flexible model selection
+
+### Mistral
+
+- OpenAI-compatible API access
+- Strong general-purpose model support
 
 ### OpenAI
 
