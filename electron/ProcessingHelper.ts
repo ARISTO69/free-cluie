@@ -75,7 +75,7 @@ export class ProcessingHelper {
       )
 
     } else if (openRouterKey) {
-      const model = process.env.OPENROUTER_MODEL || "mistralai/mistral-large"
+      const model = process.env.OPENROUTER_MODEL || "openrouter/auto"
       console.log(`[ProcessingHelper] Initializing with OpenRouter (${model})`)
       this.llmHelper = new LLMHelper(
         openRouterKey,
@@ -217,6 +217,36 @@ export class ProcessingHelper {
         settings.deepgramApiKey,
         settings.practicalSystemPrompt ?? settings.systemPrompt,
         settings.systemPromptsEnabled ?? true
+      )
+    }
+
+    if (settings.provider === "custom") {
+      if (!settings.customApiKey) {
+        throw new Error("Saved custom provider settings are missing the API key")
+      }
+      if (!settings.customBaseUrl) {
+        throw new Error("Saved custom provider settings are missing the base URL")
+      }
+      return new LLMHelper(
+        settings.customApiKey,
+        false,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        false,
+        undefined,
+        false,
+        undefined,
+        settings.chatSystemPrompt ?? settings.systemPrompt,
+        undefined,
+        settings.deepgramApiKey,
+        settings.practicalSystemPrompt ?? settings.systemPrompt,
+        settings.systemPromptsEnabled ?? true,
+        true,
+        settings.customProviderName,
+        settings.customBaseUrl,
+        settings.customModel
       )
     }
 

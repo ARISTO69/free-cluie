@@ -13,7 +13,7 @@ import ModelSelector from "../components/ui/ModelSelector"
 import { UITheme } from "../types/theme"
 import { Mic } from "lucide-react"
 
-type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
+type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom"
 
 interface QueueProps {
   setView: React.Dispatch<React.SetStateAction<"queue" | "solutions" | "debug">>
@@ -94,6 +94,8 @@ const Queue: React.FC<QueueProps> = ({ setView, uiTheme, onThemeChange }) => {
         return "OpenRouter"
       case "mistral":
         return "Mistral"
+      case "custom":
+        return "Custom"
       default:
         return "Gemini"
     }

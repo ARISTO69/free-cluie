@@ -1,7 +1,7 @@
 import fs from "fs"
 
 // ─── Provider types ───────────────────────────────────────────────────────────
-type Provider = "gemini" | "ollama" | "openai" | "openrouter" | "mistral"
+type Provider = "gemini" | "ollama" | "openai" | "openrouter" | "mistral" | "custom"
 
 export interface ProviderModel {
   id: string
@@ -26,6 +26,7 @@ const DEFAULT_OPENAI_MODELS: ProviderModel[] = [
 ]
 
 const DEFAULT_OPENROUTER_MODELS: ProviderModel[] = [
+  { id: "openrouter/auto", name: "OpenRouter Auto Router" },
   { id: "openai/gpt-4.1", name: "OpenAI GPT-4.1" },
   { id: "openai/gpt-4.1-mini", name: "OpenAI GPT-4.1 Mini" },
   { id: "anthropic/claude-sonnet-4", name: "Anthropic Claude Sonnet 4" },
@@ -79,6 +80,8 @@ export class LLMHelper {
   private openaiApiKey: string = ""
   private openaiModel: string = ""
   private openaiBaseUrl: string = ""
+  private customProviderName: string = ""
+  private customBaseUrl: string = ""
   private deepgramApiKey: string = ""
 
   constructor(
@@ -96,7 +99,11 @@ export class LLMHelper {
     geminiModel?: string,
     deepgramApiKey?: string,
     practicalSystemPrompt?: string,
-    systemPromptsEnabled: boolean = true
+    systemPromptsEnabled: boolean = true,
+    useCustom: boolean = false,
+    customProviderName?: string,
+    customBaseUrl?: string,
+    customModel?: string
   ) {
     this.setSystemPromptsEnabled(systemPromptsEnabled)
     this.setChatSystemPrompt(systemPrompt || "")
@@ -121,7 +128,7 @@ export class LLMHelper {
     } else if (useOpenRouter && apiKey) {
       this.provider = "openrouter"
       this.openaiApiKey = apiKey
-      this.openaiModel = openRouterModel || "mistralai/mistral-large"
+      this.openaiModel = openRouterModel || "openrouter/auto"
       this.openaiBaseUrl = "https://openrouter.ai/api/v1"
       console.log(`[LLMHelper] Using OpenRouter with model: ${this.openaiModel}`)
 
@@ -131,6 +138,15 @@ export class LLMHelper {
       this.openaiModel = mistralModel || "mistral-large-latest"
       this.openaiBaseUrl = "https://api.mistral.ai/v1"
       console.log(`[LLMHelper] Using Mistral with model: ${this.openaiModel}`)
+
+    } else if (useCustom && apiKey && customBaseUrl) {
+      this.provider = "custom"
+      this.customProviderName = customProviderName?.trim() || "Custom"
+      this.openaiApiKey = apiKey
+      this.openaiModel = customModel || ""
+      this.customBaseUrl = customBaseUrl.trim()
+      this.openaiBaseUrl = this.customBaseUrl
+      console.log(`[LLMHelper] Using ${this.customProviderName} with model: ${this.openaiModel || "<pending>"}`)
 
     } else if (apiKey) {
       this.provider = "gemini"
@@ -147,6 +163,44 @@ export class LLMHelper {
   private cleanJsonResponse(text: string): string {
     text = text.replace(/^```(?:json)?\n/, "").replace(/\n```$/, "")
     return text.trim()
+  }
+
+  private normalizeBaseUrl(baseUrl: string): string {
+    return baseUrl.trim().replace(/\/+$/, "")
+  }
+
+  private buildApiUrl(baseUrl: string, path: string): string {
+    const normalizedBaseUrl = this.normalizeBaseUrl(baseUrl)
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`
+    return `${normalizedBaseUrl}${normalizedPath}`
+  }
+
+  private async fetchCompatibleModels(baseUrl: string, apiKey?: string): Promise<ProviderModel[]> {
+    const headers: Record<string, string> = {}
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`
+    }
+
+    const response = await fetch(this.buildApiUrl(baseUrl, "/models"), { headers })
+    if (!response.ok) {
+      throw new Error(`Models API error ${response.status}`)
+    }
+
+    const data = await response.json()
+    const rawModels = Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.models)
+        ? data.models
+        : Array.isArray(data)
+          ? data
+          : []
+
+    return rawModels
+      .map((model: any) => ({
+        id: String(model.id || model.name || model.model || "").trim(),
+        name: model.name || model.display_name || model.displayName || model.id || model.model
+      }))
+      .filter((model: ProviderModel) => model.id)
   }
 
   private getSystemPrompt(customPrompt = this.chatSystemPrompt): string {
@@ -265,7 +319,7 @@ export class LLMHelper {
 
   public async getAvailableModels(
     provider: Provider,
-    options: { apiKey?: string; ollamaUrl?: string } = {}
+    options: { apiKey?: string; ollamaUrl?: string; baseUrl?: string } = {}
   ): Promise<ProviderModel[]> {
     if (provider === "ollama") {
       const previousUrl = this.ollamaUrl
@@ -285,6 +339,11 @@ export class LLMHelper {
 
     if (provider === "mistral") {
       return this.getMistralModels(options.apiKey)
+    }
+
+    if (provider === "custom") {
+      const baseUrl = options.baseUrl || this.customBaseUrl
+      return this.getOpenAICompatibleModels(baseUrl, options.apiKey)
     }
 
     return this.getOpenRouterModels()
@@ -337,19 +396,20 @@ export class LLMHelper {
 
   private async getOpenRouterModels(): Promise<ProviderModel[]> {
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/models")
-      if (!response.ok) throw new Error(`OpenRouter models API error ${response.status}`)
-      const data = await response.json()
-      const models = (data.data || [])
-        .map((model: any) => ({
-          id: String(model.id || ""),
-          name: model.name
-        }))
-        .filter((model: ProviderModel) => model.id)
+      const models = await this.getOpenAICompatibleModels("https://openrouter.ai/api/v1")
       return models.length > 0 ? models : DEFAULT_OPENROUTER_MODELS
     } catch (error) {
       console.error("[LLMHelper] Error fetching OpenRouter models:", error)
       return DEFAULT_OPENROUTER_MODELS
+    }
+  }
+
+  private async getOpenAICompatibleModels(baseUrl: string, apiKey?: string): Promise<ProviderModel[]> {
+    try {
+      return await this.fetchCompatibleModels(baseUrl, apiKey)
+    } catch (error) {
+      console.error("[LLMHelper] Error fetching OpenAI-compatible models:", error)
+      return []
     }
   }
 
@@ -418,26 +478,28 @@ export class LLMHelper {
   // ─── Core text chat ─────────────────────────────────────────────────────────
 
   public async chat(message: string): Promise<string> {
-    return this.chatWithGemini(message)
-  }
-
-  public async chatWithGemini(message: string): Promise<string> {
     try {
       if (this.provider === "ollama") {
         return await this.callOllama(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
-      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      }
+
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         return await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: message },
         ])
-      } else {
-        const result = await this.geminiModel.generateContent(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
-        return result.response.text()
       }
+
+      const result = await this.geminiModel.generateContent(`${this.getSystemPrompt()}\n\nUser message:\n${message}`)
+      return result.response.text()
     } catch (error: any) {
       console.error("[LLMHelper] Error in chat:", error)
       throw error
     }
+  }
+
+  public async chatWithGemini(message: string): Promise<string> {
+    return this.chat(message)
   }
 
   public async practicalChat(message: string, memory: string): Promise<string> {
@@ -454,7 +516,7 @@ ${message}`
     try {
       if (this.provider === "ollama") {
         return await this.callOllama(prompt)
-      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         return await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt(this.practicalSystemPrompt) },
           { role: "user", content: prompt },
@@ -475,7 +537,7 @@ ${message}`
     const jsonPrompt = `${this.getSystemPrompt()}\n\nAnalyze these images and extract the following information in JSON format:\n{\n  "problem_statement": "A clear statement of the problem or situation.",\n  "context": "Relevant background or context from the images.",\n  "suggested_responses": ["First possible answer or action", "Second possible answer or action", "..."],\n  "reasoning": "Explanation of why these suggestions are appropriate."\n}\nImportant: Return ONLY the JSON object, without any markdown formatting or code blocks.`
 
     try {
-      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         const contentParts: OpenAIContentPart[] = [{ type: "text", text: jsonPrompt }]
         for (const p of imagePaths) {
           contentParts.push({ type: "image_url", image_url: { url: await this.imagePathToBase64DataUrl(p) } })
@@ -510,7 +572,7 @@ ${message}`
     console.log(`[LLMHelper] Calling ${this.provider} for solution...`)
     try {
       let text: string
-      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         text = await this.callOpenAICompatible([
           { role: "system", content: this.getSystemPrompt() },
           { role: "user", content: prompt },
@@ -536,7 +598,7 @@ ${message}`
     const prompt = `${this.getSystemPrompt()}\n\nGiven:\n1. Original problem: ${JSON.stringify(problemInfo, null, 2)}\n2. Current response: ${currentCode}\n3. Debug images provided\n\nAnalyze and provide feedback in this JSON format:\n{\n  "solution": {\n    "code": "The code or main answer here.",\n    "problem_statement": "Restate the problem.",\n    "context": "Relevant background/context.",\n    "suggested_responses": ["First possible answer", "Second possible answer", "..."],\n    "reasoning": "Explanation of suggestions."\n  }\n}\nReturn ONLY the JSON object.`
 
     try {
-      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         const contentParts: OpenAIContentPart[] = [{ type: "text", text: prompt }]
         for (const p of debugImagePaths) {
           contentParts.push({ type: "image_url", image_url: { url: await this.imagePathToBase64DataUrl(p) } })
@@ -569,7 +631,7 @@ ${message}`
 
     try {
       let text: string
-      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         const dataUrl = await this.imagePathToBase64DataUrl(imagePath)
         text = await this.callOpenAICompatible([{
           role: "user",
@@ -640,7 +702,7 @@ ${message}`
         }
       }
 
-      const text = await this.chatWithGemini(transcript)
+      const text = await this.chat(transcript)
       return { text, timestamp: Date.now() }
     }
 
@@ -683,7 +745,7 @@ ${message}`
 
   public getCurrentModel(): string {
     if (this.provider === "ollama") return this.ollamaModel
-    if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") return this.openaiModel
+    if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") return this.openaiModel
     return this.geminiModelName
   }
 
@@ -712,7 +774,7 @@ ${message}`
   public async switchToOpenRouter(apiKey: string, model?: string): Promise<void> {
     this.provider = "openrouter"
     this.openaiApiKey = apiKey
-    this.openaiModel = model || "mistralai/mistral-large"
+    this.openaiModel = model || "openrouter/auto"
     this.openaiBaseUrl = "https://openrouter.ai/api/v1"
     console.log(`[LLMHelper] Switched to OpenRouter: ${this.openaiModel}`)
   }
@@ -733,13 +795,37 @@ ${message}`
     console.log(`[LLMHelper] Switched to Mistral: ${this.openaiModel}`)
   }
 
+  public async switchToCustomProvider(providerName: string, apiKey: string, baseUrl: string, model?: string): Promise<void> {
+    this.provider = "custom"
+    this.customProviderName = providerName.trim() || "Custom"
+    this.openaiApiKey = apiKey
+    this.customBaseUrl = this.normalizeBaseUrl(baseUrl)
+    this.openaiBaseUrl = this.customBaseUrl
+    this.openaiModel = model || ""
+
+    const models = await this.getOpenAICompatibleModels(this.customBaseUrl, this.openaiApiKey)
+    if (!model) {
+      if (models.length === 0) {
+        throw new Error(`${this.customProviderName} did not return any models`)
+      }
+      this.openaiModel = models[0].id
+    }
+
+    if (!this.openaiModel) {
+      throw new Error(`No model selected for ${this.customProviderName}`)
+    }
+
+    await this.callOpenAICompatible([{ role: "user", content: "Hello" }])
+    console.log(`[LLMHelper] Switched to ${this.customProviderName}: ${this.openaiModel}`)
+  }
+
   public async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
       if (this.provider === "ollama") {
         const available = await this.checkOllamaAvailable()
         if (!available) return { success: false, error: `Ollama not available at ${this.ollamaUrl}` }
         await this.callOllama("Hello")
-      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral") {
+      } else if (this.provider === "openai" || this.provider === "openrouter" || this.provider === "mistral" || this.provider === "custom") {
         await this.callOpenAICompatible([{ role: "user", content: "Hello" }])
       } else {
         const result = await this.geminiModel.generateContent("Hello")

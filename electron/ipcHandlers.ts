@@ -24,6 +24,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     openRouterModel: overrides.openRouterModel ?? existing?.openRouterModel,
     mistralApiKey: overrides.mistralApiKey ?? existing?.mistralApiKey,
     mistralModel: overrides.mistralModel ?? existing?.mistralModel,
+    customProviderName: overrides.customProviderName ?? existing?.customProviderName,
+    customBaseUrl: overrides.customBaseUrl ?? existing?.customBaseUrl,
+    customApiKey: overrides.customApiKey ?? existing?.customApiKey,
+    customModel: overrides.customModel ?? existing?.customModel,
     ollamaModel: overrides.ollamaModel ?? existing?.ollamaModel,
     ollamaUrl: overrides.ollamaUrl ?? existing?.ollamaUrl,
     systemPrompt: overrides.systemPrompt ?? existing?.systemPrompt,
@@ -251,7 +255,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   ipcMain.handle("gemini-chat", async (event, message: string) => {
     try {
-      const result = await appState.processingHelper.getLLMHelper().chatWithGemini(message);
+      const result = await appState.processingHelper.getLLMHelper().chat(message);
       return result;
     } catch (error: any) {
       console.error("Error in gemini-chat handler:", error);
@@ -300,10 +304,14 @@ export function initializeIpcHandlers(appState: AppState): void {
   ipcMain.handle("get-current-llm-config", async () => {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper();
+      const existing = appState.getSettingsHelper().getLlmSettings();
       return {
         provider: llmHelper.getCurrentProvider(),
         model: llmHelper.getCurrentModel(),
-        isOllama: llmHelper.isUsingOllama()
+        isOllama: llmHelper.isUsingOllama(),
+        customProviderName: existing?.customProviderName,
+        customBaseUrl: existing?.customBaseUrl,
+        customModel: existing?.customModel
       };
     } catch (error: any) {
       console.error("Error getting current LLM config:", error);
@@ -354,8 +362,8 @@ export function initializeIpcHandlers(appState: AppState): void {
     "get-available-provider-models",
     async (
       _,
-      provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
-      options?: { apiKey?: string; ollamaUrl?: string }
+      provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom",
+      options?: { apiKey?: string; ollamaUrl?: string; baseUrl?: string }
     ) => {
       try {
         const llmHelper = appState.processingHelper.getLLMHelper();
@@ -448,6 +456,40 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: true };
     } catch (error: any) {
       console.error("Error switching to OpenRouter:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("switch-to-custom-provider", async (_, providerName: string, baseUrl: string, apiKey: string, model?: string) => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      const existing = appState.getSettingsHelper().getLlmSettings();
+      const customProviderName = providerName || existing?.customProviderName || "Custom";
+      const customBaseUrl = baseUrl || existing?.customBaseUrl;
+      const customApiKey = apiKey || existing?.customApiKey;
+      const customModel = model || existing?.customModel;
+
+      if (!customBaseUrl) {
+        throw new Error("Custom provider base URL is required")
+      }
+      if (!customApiKey) {
+        throw new Error("Custom provider API key is required")
+      }
+
+      await llmHelper.switchToCustomProvider(customProviderName, customApiKey, customBaseUrl, customModel);
+      saveLlmSettings(buildLlmSettings(existing, llmHelper.getCurrentProvider(), {
+        provider: "custom",
+        customProviderName,
+        customBaseUrl,
+        customApiKey,
+        customModel: customModel || llmHelper.getCurrentModel(),
+      }));
+      llmHelper.setSystemPromptsEnabled(getSystemPromptsEnabled(existing))
+      llmHelper.setChatSystemPrompt(getChatSystemPrompt(existing))
+      llmHelper.setPracticalSystemPrompt(getPracticalSystemPrompt(existing))
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error switching to custom provider:", error);
       return { success: false, error: error.message };
     }
   });

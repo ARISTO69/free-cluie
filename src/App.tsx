@@ -53,9 +53,9 @@ declare global {
       quitApp: () => Promise<void>
       
       // LLM Model Management
-      getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"; model: string; isOllama: boolean }>
+      getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom"; model: string; isOllama: boolean; customProviderName?: string; customBaseUrl?: string; customModel?: string }>
       getSavedLlmSettings: () => Promise<{
-        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
+        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom"
         geminiApiKey?: string
         geminiModel?: string
         openAiApiKey?: string
@@ -64,6 +64,10 @@ declare global {
         openRouterModel?: string
         mistralApiKey?: string
         mistralModel?: string
+        customProviderName?: string
+        customBaseUrl?: string
+        customApiKey?: string
+        customModel?: string
         ollamaUrl?: string
         ollamaModel?: string
         systemPrompt?: string
@@ -74,14 +78,15 @@ declare global {
       } | null>
       getAvailableOllamaModels: () => Promise<string[]>
       getAvailableProviderModels: (
-        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
-        options?: { apiKey?: string; ollamaUrl?: string }
+        provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom",
+        options?: { apiKey?: string; ollamaUrl?: string; baseUrl?: string }
       ) => Promise<Array<{ id: string; name?: string }>>
       switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
       switchToGemini: (apiKey?: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToOpenAI: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
+      switchToCustomProvider: (providerName: string, baseUrl: string, apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
       saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
       saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => Promise<{ success: boolean; error?: string }>
       saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>

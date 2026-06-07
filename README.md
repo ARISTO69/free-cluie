@@ -29,89 +29,119 @@ If you want help integrating AI into your business, visit [www.envoyc.com](https
   - OpenAI API key
   - OpenRouter API key
   - Mistral API key
+  - Custom OpenAI-compatible provider (used for NVIDIA NIM and similar)
   - Ollama for local/private usage
 
 ### Windows Setup
 
-1. Check your Node.js version.
+The Windows install scripts ship as `Windows Installation.rar` (extract with WinRAR, 7-Zip, or the built-in Windows extractor). They use `winget` (bundled with Windows 10 1809+ / Windows 11).
 
-```bash
-node -v
-```
-
-If the version is anything other than `v24.0.0` or another `24.x` release, run `#1 Install NodeJS 24.0.0.bat`.
-
-2. Run `#2 Create env and Install.bat`.
-
-3. Run `#3 Add your API keys.bat` and enter your keys one by one.
-
-Press `Enter` for any API you do not have.
-
-4. Run `#4 Run Command.bat`.
-
-### Mac/Linux Setup
-
-1. Check your Node.js version.
-
-```bash
-node -v
-```
-
-If you have Node.js `22.x`, `26.x`, or any version other than `24.x`, remove the current install and install Node.js 24.0.0.
-
-If you use `nvm`:
-
-```bash
-nvm uninstall <current-version>
-nvm install 24.0.0
-nvm use 24.0.0
-```
-
-If you use Homebrew on macOS:
-
-```bash
-brew uninstall node
-brew install node@24
-brew link --force --overwrite node@24
-```
-
-2. Create a `.env` file in the project root and paste this:
-
-```env
-MISTRAL_API_KEY=""
-OPENROUTER_API_KEY=""
-GEMINI_API_KEY=""
-OPENAI_API_KEY=""
-```
-
-Add your API keys between the quotes, then save the file.
-
-3. Open a terminal in the project folder and run:
-
-```bash
-npm install
-```
-
-4. Start the app:
-
-```bash
-npm run app:dev
-```
-
-### Install
+1. Clone the repo and open a terminal in the project folder.
 
 ```bash
 git clone https://github.com/ARISTO69/free-cluie.git
 cd free-cluie
 ```
 
+2. Download `Windows Installation.rar` from the repo root, then extract it anywhere (for example, into the cloned repo so you get `free-cluie\Windows Installation\01-install-nodejs.bat`).
+
+3. Open the extracted `Windows Installation\` folder and run the scripts in order. Double-click each one from Explorer, or invoke from a terminal:
+
+```bat
+01-install-nodejs.bat
+02-create-env-and-install.bat
+03-add-api-keys.bat
+04-run-dev-server.bat
+```
+
+- `01-install-nodejs.bat` — installs Node.js 24.0.0 via `winget` (also adds it to your `PATH`).
+- `02-create-env-and-install.bat` — asks for the path to your cloned repo (default: the parent of the install folder), creates a blank `.env` there, and runs `npm install`. If `.env` already exists, it asks before overwriting.
+- `03-add-api-keys.bat` — asks for the repo path, then prompts you for each API key. Press `Enter` to skip any key you don't have.
+- `04-run-dev-server.bat` — asks for the repo path, then starts the app in dev mode.
+
+If you want a clean Node.js 24.0.0 reinstall first, run `00-install-nodejs-24-reinstall.bat` instead of `01-install-nodejs.bat`.
+
+### Mac/Linux Setup
+
+The Mac/Linux install scripts ship as `Mac-Linux Installation.rar` (extract with `unar`, The Unarchiver, or any tool that handles RAR). They use `nvm` (installed automatically if missing). They need `curl` available on `PATH` and bash 4+.
+
+1. Clone the repo and open a terminal in the project folder.
+
+```bash
+git clone https://github.com/ARISTO69/free-cluie.git
+cd free-cluie
+```
+
+2. Download `Mac-Linux Installation.rar` from the repo root, then extract it anywhere (for example, into the cloned repo so you get `free-cluie/Mac-Linux Installation/01-install-nodejs.sh`).
+
+3. From the extracted `Mac-Linux Installation/` folder, run the scripts in order:
+
+```bash
+chmod +x 0*-*.sh
+./01-install-nodejs.sh
+./02-create-env-and-install.sh
+./03-add-api-keys.sh
+./04-run-dev-server.sh
+```
+
+- `01-install-nodejs.sh` — installs nvm (if needed) and Node.js 24.0.0.
+- `02-create-env-and-install.sh` — asks for the path to your cloned repo (default: the parent of the install folder), creates a blank `.env` there, and runs `npm install`. If `.env` already exists, it asks before overwriting.
+- `03-add-api-keys.sh` — asks for the repo path, then prompts you for each API key. Press `Enter` to skip any key you don't have.
+- `04-run-dev-server.sh` — asks for the repo path, then starts the app in dev mode.
+
+If you want a clean Node.js 24.0.0 reinstall first, run `./00-install-nodejs-24-reinstall.sh` instead of `./01-install-nodejs.sh`.
+
+If you'd rather install Node.js manually, any Node.js `24.x` release works:
+
+```bash
+# nvm
+nvm install 24
+nvm use 24
+nvm alias default 24
+
+# Homebrew (macOS)
+brew install node@24
+brew link --force --overwrite node@24
+```
+
+### Install (no scripts)
+
+If you prefer to set things up by hand:
+
+```bash
+git clone https://github.com/ARISTO69/free-cluie.git
+cd free-cluie
+```
+
+Create a `.env` file in the project root with:
+
+```env
+MISTRAL_API_KEY=""
+OPENROUTER_API_KEY=""
+GEMINI_API_KEY=""
+OPENAI_API_KEY=""
+NVIDIA_NIM_API_KEY=""
+```
+
+Fill in any keys you have between the quotes and save. Then:
+
+```bash
+npm install
+npm run app:dev
+```
+
+Any API keys you enter in the app are stored locally in your OS user data directory and are not committed to the repository.
+
 ### Environment Variables
 
 ```env
 MISTRAL_API_KEY=your_api_key_here
 OPENROUTER_API_KEY=your_api_key_here
+OPENROUTER_MODEL=openrouter/auto
 GEMINI_API_KEY=your_api_key_here
 OPENAI_API_KEY=your_api_key_here
+# Used when you wire NVIDIA NIM through the in-app Custom Provider
+NVIDIA_NIM_API_KEY=your_nvidia_nim_api_key_here
 ```
 
 Optional Ollama configuration:
@@ -155,6 +185,18 @@ npm run dist
 
 - OpenAI-compatible API access
 - Flexible model selection
+- Default router model: `openrouter/auto`
+
+### Custom
+
+- Bring your own OpenAI-compatible endpoint
+- Save a provider name, base URL, key, and discovered model list locally
+
+### NVIDIA NIM
+
+- Add it from **Settings → Custom Provider**: set the provider name (e.g. `nvidia-nim`), paste your `NVIDIA_NIM_API_KEY`, and set the base URL to `https://integrate.api.nvidia.com/v1`
+- The app uses the OpenAI-compatible API format, so any model NVIDIA exposes through NIM works
+- Discoverable model list is populated once you save the provider
 
 ### Mistral
 

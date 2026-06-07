@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { UITheme } from "../../types/theme";
 
-type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral";
+type Provider = "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom";
 
 interface ModelConfig {
   provider: Provider;
   model: string;
   isOllama: boolean;
+  customProviderName?: string;
+  customBaseUrl?: string;
+  customModel?: string;
 }
 
 interface SavedLlmSettings {
@@ -19,6 +22,10 @@ interface SavedLlmSettings {
   openRouterModel?: string;
   mistralApiKey?: string;
   mistralModel?: string;
+  customProviderName?: string;
+  customBaseUrl?: string;
+  customApiKey?: string;
+  customModel?: string;
   ollamaUrl?: string;
   ollamaModel?: string;
   systemPrompt?: string;
@@ -40,7 +47,7 @@ interface ModelSelectorProps {
   onThemeChange: (theme: UITheme) => void;
 }
 
-const DEFAULT_OPENROUTER_MODEL = "mistralai/mistral-large";
+const DEFAULT_OPENROUTER_MODEL = "openrouter/auto";
 const DEFAULT_OPENAI_MODEL = "gpt-5-nano";
 const DEFAULT_MISTRAL_MODEL = "mistral-large-latest";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
@@ -58,12 +65,16 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
   const [openAiApiKey, setOpenAiApiKey] = useState("");
   const [openRouterApiKey, setOpenRouterApiKey] = useState("");
   const [mistralApiKey, setMistralApiKey] = useState("");
+  const [customProviderName, setCustomProviderName] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customApiKey, setCustomApiKey] = useState("");
   const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
   const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   const [openAiModel, setOpenAiModel] = useState(DEFAULT_OPENAI_MODEL);
   const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL);
   const [mistralModel, setMistralModel] = useState(DEFAULT_MISTRAL_MODEL);
+  const [customModel, setCustomModel] = useState("");
   const [chatSystemPrompt, setChatSystemPrompt] = useState("");
   const [practicalSystemPrompt, setPracticalSystemPrompt] = useState("");
   const [isSystemPromptEnabled, setIsSystemPromptEnabled] = useState(false);
@@ -93,18 +104,20 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
   }, []);
 
   const getProviderLabel = (provider: Provider) => {
-    switch (provider) {
-      case "ollama":
-        return "Ollama";
-      case "openai":
-        return "OpenAI";
-      case "openrouter":
-        return "OpenRouter";
-      case "mistral":
-        return "Mistral";
-      default:
-        return "Gemini";
-    }
+      switch (provider) {
+        case "ollama":
+          return "Ollama";
+        case "openai":
+          return "OpenAI";
+        case "openrouter":
+          return "OpenRouter";
+        case "mistral":
+          return "Mistral";
+        case "custom":
+          return customProviderName || savedSettings?.customProviderName || currentConfig?.customProviderName || "Custom";
+        default:
+          return "Gemini";
+      }
   };
 
   const getModelForProvider = (provider: Provider) => {
@@ -117,6 +130,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         return openRouterModel;
       case "mistral":
         return mistralModel;
+      case "custom":
+        return customModel;
       default:
         return geminiModel;
     }
@@ -127,6 +142,12 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     if (provider === "openai") return openAiApiKey || saved?.openAiApiKey;
     if (provider === "openrouter") return openRouterApiKey || saved?.openRouterApiKey;
     if (provider === "mistral") return mistralApiKey || saved?.mistralApiKey;
+    if (provider === "custom") return customApiKey || saved?.customApiKey;
+    return undefined;
+  };
+
+  const getBaseUrlForProvider = (provider: Provider, saved?: SavedLlmSettings | null) => {
+    if (provider === "custom") return customBaseUrl || saved?.customBaseUrl;
     return undefined;
   };
 
@@ -146,6 +167,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     if (provider === "mistral" && !ids.includes(mistralModel)) {
       setMistralModel(ids.includes(DEFAULT_MISTRAL_MODEL) ? DEFAULT_MISTRAL_MODEL : ids[0]);
     }
+    if (provider === "custom" && !ids.includes(customModel)) {
+      setCustomModel(ids[0]);
+    }
     if (provider === "ollama" && !ids.includes(selectedOllamaModel)) {
       setSelectedOllamaModel(ids[0]);
     }
@@ -156,7 +180,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       setIsLoadingModels(true);
       const models = await window.electronAPI.getAvailableProviderModels(provider, {
         apiKey: getApiKeyForProvider(provider, saved),
-        ollamaUrl: saved?.ollamaUrl || ollamaUrl
+        ollamaUrl: saved?.ollamaUrl || ollamaUrl,
+        baseUrl: getBaseUrlForProvider(provider, saved)
       });
       setAvailableModels(models);
       selectDefaultModel(provider, models);
@@ -187,6 +212,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
     if (provider === "openai") setOpenAiModel(model);
     if (provider === "openrouter") setOpenRouterModel(model);
     if (provider === "mistral") setMistralModel(model);
+    if (provider === "custom") setCustomModel(model);
     setModelSearch("");
     setIsModelMenuOpen(false);
   };
@@ -240,6 +266,26 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
       }
       if (saved?.mistralApiKey) {
         setMistralApiKey(saved.mistralApiKey);
+      }
+      if (saved?.customProviderName) {
+        setCustomProviderName(saved.customProviderName);
+      }
+      if (!saved?.customProviderName && config.customProviderName) {
+        setCustomProviderName(config.customProviderName);
+      }
+      if (saved?.customBaseUrl) {
+        setCustomBaseUrl(saved.customBaseUrl);
+      }
+      if (!saved?.customBaseUrl && config.customBaseUrl) {
+        setCustomBaseUrl(config.customBaseUrl);
+      }
+      if (saved?.customApiKey) {
+        setCustomApiKey(saved.customApiKey);
+      }
+      if (config.provider === "custom") {
+        setCustomModel(saved?.customModel || config.customModel || config.model);
+      } else if (saved?.customModel) {
+        setCustomModel(saved.customModel);
       }
       const savedChatPrompt = saved?.chatSystemPrompt ?? saved?.systemPrompt ?? "";
       const savedPracticalPrompt = saved?.practicalSystemPrompt ?? saved?.systemPrompt ?? "";
@@ -298,6 +344,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
         result = await window.electronAPI.switchToOpenRouter(openRouterApiKey || savedSettings?.openRouterApiKey || "", openRouterModel);
       } else if (selectedProvider === "mistral") {
         result = await window.electronAPI.switchToMistral(mistralApiKey || savedSettings?.mistralApiKey || "", mistralModel);
+      } else if (selectedProvider === "custom") {
+        result = await window.electronAPI.switchToCustomProvider(
+          customProviderName || savedSettings?.customProviderName || "Custom",
+          customBaseUrl || savedSettings?.customBaseUrl || "",
+          customApiKey || savedSettings?.customApiKey || "",
+          customModel
+        );
       } else {
         result = await window.electronAPI.switchToGemini(geminiApiKey || savedSettings?.geminiApiKey || undefined, geminiModel);
       }
@@ -548,6 +601,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
           <option value="ollama">Ollama</option>
           <option value="openrouter">OpenRouter</option>
           <option value="mistral">Mistral</option>
+          <option value="custom">Custom</option>
         </select>
       </div>
 
@@ -692,6 +746,60 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, onChatOpen
               </button>
             </div>
             {renderModelPicker()}
+          </div>
+        </div>
+      )}
+
+      {selectedProvider === "custom" && (
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs font-medium text-gray-700">Provider Name</label>
+            <input
+              type="text"
+              placeholder="Example: Local Studio, Groq, Fireworks"
+              value={customProviderName}
+              onChange={(e) => setCustomProviderName(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-700">Base URL</label>
+            <input
+              type="url"
+              placeholder="https://api.your-llm.com/v1"
+              value={customBaseUrl}
+              onChange={(e) => setCustomBaseUrl(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-700">API Key</label>
+            <input
+              type="password"
+              placeholder="Enter provider API key..."
+              value={customApiKey}
+              onChange={(e) => setCustomApiKey(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white/40 border border-white/60 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Model</label>
+              <button
+                onClick={() => loadProviderModels("custom", savedSettings)}
+                className="px-2 py-1 text-xs bg-white/60 hover:bg-white/80 rounded transition-all"
+                title="Fetch models"
+              >
+                {isLoadingModels ? "Loading..." : "Fetch Models"}
+              </button>
+            </div>
+            {modelOptions.length > 0 ? (
+              renderModelPicker()
+            ) : (
+              <div className="text-xs text-gray-600 bg-yellow-100/60 p-2 rounded">
+                Enter the provider details, then fetch models from the custom endpoint.
+              </div>
+            )}
           </div>
         </div>
       )}

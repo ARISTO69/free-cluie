@@ -5,6 +5,16 @@ echo        Node.js 24 Installer
 echo ============================================
 echo.
 
+REM Preflight: check for winget
+where winget >nul 2>nul
+if errorlevel 1 (
+    echo [X] Error: 'winget' is not available on this system.
+    echo     winget ships with App Installer on Windows 10 1809+ / Windows 11.
+    echo     Please install or update App Installer from the Microsoft Store and try again.
+    pause
+    exit /b 1
+)
+
 echo [1/2] Uninstalling existing Node.js...
 echo.
 winget uninstall OpenJS.NodeJS --accept-source-agreements

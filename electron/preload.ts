@@ -38,9 +38,9 @@ interface ElectronAPI {
   quitApp: () => Promise<void>
   
   // LLM Model Management
-  getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"; model: string; isOllama: boolean }>
+  getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom"; model: string; isOllama: boolean; customProviderName?: string; customBaseUrl?: string; customModel?: string }>
   getSavedLlmSettings: () => Promise<{
-    provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral"
+    provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom"
     geminiApiKey?: string
     geminiModel?: string
     openAiApiKey?: string
@@ -49,6 +49,10 @@ interface ElectronAPI {
     openRouterModel?: string
     mistralApiKey?: string
     mistralModel?: string
+    customProviderName?: string
+    customBaseUrl?: string
+    customApiKey?: string
+    customModel?: string
     ollamaUrl?: string
     ollamaModel?: string
     systemPrompt?: string
@@ -59,14 +63,15 @@ interface ElectronAPI {
   } | null>
   getAvailableOllamaModels: () => Promise<string[]>
   getAvailableProviderModels: (
-    provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral",
-    options?: { apiKey?: string; ollamaUrl?: string }
+    provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom",
+    options?: { apiKey?: string; ollamaUrl?: string; baseUrl?: string }
   ) => Promise<Array<{ id: string; name?: string }>>
   switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
   switchToGemini: (apiKey?: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToOpenAI: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToOpenRouter: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   switchToMistral: (apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
+  switchToCustomProvider: (providerName: string, baseUrl: string, apiKey: string, model?: string) => Promise<{ success: boolean; error?: string }>
   saveSystemPrompt: (systemPrompt: string) => Promise<{ success: boolean; error?: string }>
   saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => Promise<{ success: boolean; error?: string }>
   saveDeepgramApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
@@ -218,13 +223,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCurrentLlmConfig: () => ipcRenderer.invoke("get-current-llm-config"),
   getSavedLlmSettings: () => ipcRenderer.invoke("get-saved-llm-settings"),
   getAvailableOllamaModels: () => ipcRenderer.invoke("get-available-ollama-models"),
-  getAvailableProviderModels: (provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral", options?: { apiKey?: string; ollamaUrl?: string }) =>
+  getAvailableProviderModels: (provider: "ollama" | "gemini" | "openai" | "openrouter" | "mistral" | "custom", options?: { apiKey?: string; ollamaUrl?: string; baseUrl?: string }) =>
     ipcRenderer.invoke("get-available-provider-models", provider, options),
   switchToOllama: (model?: string, url?: string) => ipcRenderer.invoke("switch-to-ollama", model, url),
   switchToGemini: (apiKey?: string, model?: string) => ipcRenderer.invoke("switch-to-gemini", apiKey, model),
   switchToOpenAI: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-openai", apiKey, model),
   switchToOpenRouter: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-openrouter", apiKey, model),
   switchToMistral: (apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-mistral", apiKey, model),
+  switchToCustomProvider: (providerName: string, baseUrl: string, apiKey: string, model?: string) => ipcRenderer.invoke("switch-to-custom-provider", providerName, baseUrl, apiKey, model),
   saveSystemPrompt: (systemPrompt: string) => ipcRenderer.invoke("save-system-prompt", systemPrompt),
   saveSystemPrompts: (prompts: { chatSystemPrompt: string; practicalSystemPrompt: string; enabled: boolean }) => ipcRenderer.invoke("save-system-prompts", prompts),
   saveDeepgramApiKey: (apiKey: string) => ipcRenderer.invoke("save-deepgram-api-key", apiKey),
